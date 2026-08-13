@@ -23,10 +23,23 @@
    `FRONTEND_ORIGIN` to this URL (redeploy the backend for it to take
    effect).
 
+   Note: `frontend/vercel.json` is committed in the repo and auto-detected
+   by Vercel — it adds a SPA rewrite rule so deep links like `/login` and
+   `/dashboard` don't 404 on refresh. No manual configuration needed.
+5. Also make sure Supabase's Authentication -> URL Configuration includes
+   this Vercel URL in Site URL / Additional Redirect URLs (see
+   `backend/SUPABASE_SETUP.md`), otherwise Google sign-in will redirect
+   users to the wrong place.
+
 ## Smoke test
 
 1. `curl https://<your-render-url>/health` — expect
    `{"status": "ok", "supabase_reachable": true}`.
-2. Open `https://<your-vercel-url>/login` in a browser, sign up with email,
-   and confirm you land on `/dashboard` showing `Signed in as: <your user
-   id>`.
+2. Open `https://<your-vercel-url>/login`, click "Don't have an account?
+   Sign up", and submit an email/password.
+   - If Supabase's "Confirm email" setting is on (the default — see
+     `backend/SUPABASE_SETUP.md`), you'll see a message asking you to check
+     your email; click the confirmation link, then come back and log in
+     with the same credentials.
+   - If you disabled "Confirm email", signing up logs you in immediately.
+3. Confirm you land on `/dashboard` showing `Signed in as: <your user id>`.
