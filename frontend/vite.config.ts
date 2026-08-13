@@ -14,7 +14,11 @@ export default defineConfig({
         display: 'standalone',
         start_url: '/',
         theme_color: '#0f172a',
-        icons: [],
+        icons: [
+          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
+          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
       },
     }),
   ],
