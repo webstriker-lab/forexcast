@@ -12,6 +12,7 @@ def _configure_settings(monkeypatch):
     monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
     monkeypatch.setenv("SUPABASE_SERVICE_KEY", "test-service-key")
     monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-jwt-secret")
+    monkeypatch.setenv("FRONTEND_ORIGIN", "http://localhost:5173")
     get_settings.cache_clear()
     yield
     get_settings.cache_clear()

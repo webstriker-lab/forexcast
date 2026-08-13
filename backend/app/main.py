@@ -1,13 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.config import get_settings
 from app.routers import health, me
 
 app = FastAPI(title="ForexCast API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tightened to a real origin in the deployment task
+    allow_origins=[get_settings().frontend_origin],
     allow_methods=["*"],
     allow_headers=["*"],
 )
