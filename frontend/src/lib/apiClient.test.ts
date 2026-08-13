@@ -41,4 +41,17 @@ describe('fetchCurrentUser', () => {
       expect.objectContaining({ headers: { Authorization: 'Bearer abc123' } }),
     )
   })
+
+  it('throws when the backend responds with a non-ok status', async () => {
+    vi.mocked(supabase.auth.getSession).mockResolvedValue({
+      data: { session: { access_token: 'abc123' } },
+    } as never)
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchCurrentUser()).rejects.toThrow('Request failed: 500')
+  })
 })

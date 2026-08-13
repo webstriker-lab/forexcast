@@ -32,6 +32,7 @@ describe('ProtectedRoute', () => {
       session: null,
       loading: false,
       signInWithPassword: vi.fn(),
+      signUp: vi.fn(),
       signInWithGoogle: vi.fn(),
       signOut: vi.fn(),
     })
@@ -45,6 +46,7 @@ describe('ProtectedRoute', () => {
       session: { access_token: 'token' },
       loading: false,
       signInWithPassword: vi.fn(),
+      signUp: vi.fn(),
       signInWithGoogle: vi.fn(),
       signOut: vi.fn(),
     })
