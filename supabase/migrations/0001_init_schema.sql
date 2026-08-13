@@ -11,6 +11,10 @@ insert into public.currencies (code, name) values
     ('CAD', 'Canadian Dollar'), ('CHF', 'Swiss Franc'), ('CNY', 'Chinese Yuan'),
     ('SGD', 'Singapore Dollar'), ('NZD', 'New Zealand Dollar'), ('AED', 'UAE Dirham');
 
+alter table public.currencies enable row level security;
+create policy "currencies_public_read" on public.currencies
+    for select using (true);
+
 -- Per-user watched currency pairs.
 create table public.watchlist (
     id uuid primary key default gen_random_uuid(),
