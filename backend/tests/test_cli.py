@@ -1,5 +1,7 @@
 from unittest.mock import patch
 
+import pytest
+
 from app.ingestion.cli import main
 
 
@@ -30,3 +32,13 @@ def test_backfill_mode_defaults_dates():
         main(["--mode", "backfill"])
 
     mock_backfill.assert_called_once_with(start_date="1999-01-04", end_date=None)
+
+
+def test_daily_mode_propagates_run_daily_error():
+    with patch(
+        "app.ingestion.cli.run_daily", side_effect=RuntimeError("boom")
+    ), patch("app.ingestion.cli.run_backfill") as mock_backfill:
+        with pytest.raises(RuntimeError):
+            main(["--mode", "daily"])
+
+    mock_backfill.assert_not_called()

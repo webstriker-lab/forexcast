@@ -1,5 +1,8 @@
 from unittest.mock import MagicMock, patch
 
+import httpx
+import pytest
+
 from app.ingestion.supabase_rest import get_active_currencies, get_usd_rate, upsert_rates
 
 
@@ -81,3 +84,14 @@ def test_get_usd_rate_returns_none_when_not_found():
         result = get_usd_rate("2026-08-13", "EUR")
 
     assert result is None
+
+
+def test_upsert_rates_raises_when_response_errors():
+    mock_response = MagicMock()
+    mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "error", request=MagicMock(), response=MagicMock()
+    )
+    rows = [{"base_code": "USD", "quote_code": "EUR", "rate": 0.867, "as_of": "2026-08-13"}]
+    with patch("app.ingestion.supabase_rest.httpx.post", return_value=mock_response):
+        with pytest.raises(httpx.HTTPStatusError):
+            upsert_rates(rows)
