@@ -1,0 +1,57 @@
+name: Ingest exchange rates
+
+on:
+  # 17:00 UTC covers ECB's ~16:00 CET/CEST publish time year-round (CET is
+  # UTC+1 in winter, CEST is UTC+2 in summer, so 17:00 UTC is safely after
+  # publication in both cases).
+  schedule:
+    - cron: '0 17 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Ingestion mode'
+        required: true
+        default: 'daily'
+        type: choice
+        options:
+          - daily
+          - backfill
+      start_date:
+        description: 'Backfill start date (YYYY-MM-DD), defaults to 1999-01-04'
+        required: false
+        default: ''
+      end_date:
+        description: 'Backfill end date (YYYY-MM-DD), defaults to today'
+        required: false
+        default: ''
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Run ingestion
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          MODE="${{ github.event.inputs.mode || 'daily' }}"
+          if [ "$MODE" = "backfill" ]; then
+            ARGS="--mode backfill"
+            if [ -n "${{ github.event.inputs.start_date }}" ]; then
+              ARGS="$ARGS --start-date ${{ github.event.inputs.start_date }}"
+            fi
+            if [ -n "${{ github.event.inputs.end_date }}" ]; then
+              ARGS="$ARGS --end-date ${{ github.event.inputs.end_date }}"
+            fi
+            python -m app.ingestion.cli $ARGS
+          else
+            python -m app.ingestion.cli --mode daily
+          fi
