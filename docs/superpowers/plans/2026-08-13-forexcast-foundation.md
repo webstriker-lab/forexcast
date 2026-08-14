@@ -20,8 +20,8 @@
 
 This is the first of several plans implementing the [Phase 1 design spec](../specs/2026-08-13-forex-predictor-design.md). It only covers scaffolding, auth, and deployment — enough to prove the stack works end-to-end. Subsequent plans, each written and executed separately once the prior one is merged:
 
-1. **Data ingestion pipeline** — Frankfurter/GDELT/FRED fetchers, `rates_cache`/news storage, GitHub Actions cron for scheduled refresh.
-2. **Prediction & backtesting engine** — statistical model, confidence bands, low-confidence flagging.
+1. **Data ingestion pipeline (rates only)** — Frankfurter fetcher, `rates_cache` storage, GitHub Actions cron for scheduled refresh + one-time historical backfill. See [design doc](../specs/2026-08-14-data-ingestion-pipeline-design.md).
+2. **Prediction & backtesting engine** — statistical model, confidence bands, low-confidence flagging. Also now owns GDELT (news) and FRED (macro indicator) ingestion, deferred from item 1 above since neither had a consumer until this task exists.
 3. **Recommendation engine & alerts** — ACT NOW/WAIT/VOLATILE logic, manual thresholds.
 4. **LLM agent** — multi-provider adapter, tool-calling, chat.
 5. **Notifications** — Telegram + email in-app linking and dispatch.
