@@ -4,11 +4,10 @@
 
 1. Create a free account at https://render.com.
 2. New -> Blueprint, point it at this repo (`render.yaml` will be detected).
-3. Set the four environment variables (`SUPABASE_URL`,
-   `SUPABASE_SERVICE_KEY`, `SUPABASE_JWT_SECRET`, `FRONTEND_ORIGIN`) in the
-   Render dashboard — `FRONTEND_ORIGIN` should be the Vercel URL from the
-   step below (leave as `http://localhost:5173` until that URL exists, then
-   update it).
+3. Set the three environment variables (`SUPABASE_URL`,
+   `SUPABASE_SERVICE_KEY`, `FRONTEND_ORIGIN`) in the Render dashboard —
+   `FRONTEND_ORIGIN` should be the Vercel URL from the step below (leave as
+   `http://localhost:5173` until that URL exists, then update it).
 4. Deploy. Note the resulting backend URL
    (e.g. `https://forexcast-api.onrender.com`).
 

@@ -4,20 +4,20 @@
    for the base plan at time of writing).
 2. In Project Settings -> API, copy:
    - `Project URL` -> `SUPABASE_URL`
-   - `service_role` secret key -> `SUPABASE_SERVICE_KEY`
-   - `anon` public key -> `VITE_SUPABASE_ANON_KEY` (frontend)
-3. In Project Settings -> API -> JWT Settings, copy the `JWT Secret` ->
-   `SUPABASE_JWT_SECRET`. Note: this backend (`backend/app/auth.py`) only
-   verifies tokens with the **legacy HS256 shared secret** — it does not
-   support the newer asymmetric/JWKS-based signing keys that some
-   newer Supabase projects use by default. Before copying the secret,
-   confirm your project's JWT signing method is the legacy HS256 type
-   (depending on your dashboard version, this may be under a "Legacy API
-   Keys" or "JWT Settings" section rather than the default JWT signing keys
-   view). If your project only offers asymmetric signing keys, every
-   backend request will fail with a generic 401 and no useful diagnostic —
-   switch the project to (or provision it with) the legacy HS256 secret
-   first.
+   - `service_role` secret key (or the newer `sb_secret_...` key) ->
+     `SUPABASE_SERVICE_KEY`
+   - `anon` public key (or the newer `sb_publishable_...` key) ->
+     `VITE_SUPABASE_ANON_KEY` (frontend)
+3. No `SUPABASE_JWT_SECRET` is needed. This backend
+   (`backend/app/auth.py`) verifies tokens against Supabase's JWKS endpoint
+   (`{SUPABASE_URL}/auth/v1/.well-known/jwks.json`) using the project's
+   asymmetric signing key (ES256/RS256) — this is the default for new
+   Supabase projects (Project Settings -> JWT Signing Keys). JWKS only
+   publishes asymmetric public keys, so this does *not* work for a project
+   whose current signing key is still the legacy HS256 shared secret; if
+   yours is, either migrate it to an asymmetric key in that dashboard
+   section, or note that new logins issued under a legacy-HS256-only
+   project will fail auth here until you do.
 4. In Authentication -> Providers, enable "Email" and "Google" (Google
    requires a free Google Cloud OAuth client ID/secret, configured per
    Supabase's Google provider docs).

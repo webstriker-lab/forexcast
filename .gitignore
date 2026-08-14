@@ -30,6 +30,11 @@ env/
 .DS_Store
 Thumbs.db
 
+# Claude Code local tooling (regenerate with `npx skills add supabase/agent-skills`)
+.claude/
+.agents/
+skills-lock.json
+
 # Node / frontend
 node_modules/
 dist/
