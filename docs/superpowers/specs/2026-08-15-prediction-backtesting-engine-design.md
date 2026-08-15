@@ -64,18 +64,18 @@ Persists the weekly backtest's results so the daily job can build bands without 
 ```sql
 create table public.backtest_stats (
     id bigserial primary key,
-    base_code text not null references public.currencies (code),
+    quote_code text not null references public.currencies (code),
     horizon_days integer not null,
     error_lower_pct numeric not null,
     error_upper_pct numeric not null,
     volatility_p90 numeric not null,
     sample_count integer not null,
     computed_at timestamptz not null default now(),
-    unique (base_code, horizon_days)
+    unique (quote_code, horizon_days)
 );
 ```
 
-`base_code` here is always the USD-quoted currency (quote is implicitly USD, matching `rates_cache`'s pivot convention and this task's USD-only scope). RLS enabled, no public read policy — this is internal computation state the frontend never queries directly; only the service role (which bypasses RLS) reads and writes it. Everything the frontend needs is already in `predictions`.
+Column naming here deliberately mirrors `rates_cache`'s own convention: base is always `'USD'` (the pivot) and doesn't need its own column since it never varies; `quote_code` is the currency actually being predicted (e.g. `'EUR'`), matching `rates_cache.quote_code`'s meaning exactly. Predictions written by this task follow the same convention: `predictions.base_code = 'USD'`, `predictions.quote_code = <currency>` — the same series `rates_cache` already stores for that pair, so the model fits and forecasts the literal values already on hand, no inversion anywhere. RLS enabled on `backtest_stats`, no public read policy — this is internal computation state the frontend never queries directly; only the service role (which bypasses RLS) reads and writes it. Everything the frontend needs is already in `predictions`.
 
 ## 8. Components
 
