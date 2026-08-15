@@ -4,6 +4,7 @@ from app.recommendations.supabase_rest import (
     deactivate_alert,
     get_active_alerts,
     get_current_rate,
+    get_directed_rate,
     get_latest_predictions,
     get_latest_two_recommendations,
     insert_recommendations,
@@ -89,6 +90,71 @@ def test_get_current_rate_returns_none_when_not_found():
     mock_response.raise_for_status.return_value = None
     with patch("app.recommendations.supabase_rest.httpx.get", return_value=mock_response):
         result = get_current_rate("INR")
+
+    assert result is None
+
+
+def test_get_directed_rate_returns_one_when_base_equals_quote():
+    with patch(
+        "app.recommendations.supabase_rest.get_current_rate"
+    ) as mock_get_current_rate:
+        result = get_directed_rate("INR", "INR")
+
+    assert result == 1.0
+    mock_get_current_rate.assert_not_called()
+
+
+def test_get_directed_rate_delegates_to_get_current_rate_when_base_is_usd():
+    with patch(
+        "app.recommendations.supabase_rest.get_current_rate", return_value=85.0
+    ) as mock_get_current_rate:
+        result = get_directed_rate("USD", "INR")
+
+    assert result == 85.0
+    mock_get_current_rate.assert_called_once_with("INR")
+
+
+def test_get_directed_rate_inverts_when_quote_is_usd():
+    with patch(
+        "app.recommendations.supabase_rest.get_current_rate", return_value=85.0
+    ) as mock_get_current_rate:
+        result = get_directed_rate("INR", "USD")
+
+    assert result == 1 / 85.0
+    mock_get_current_rate.assert_called_once_with("INR")
+
+
+def test_get_directed_rate_returns_none_when_quote_is_usd_and_base_rate_missing():
+    with patch(
+        "app.recommendations.supabase_rest.get_current_rate", return_value=None
+    ):
+        result = get_directed_rate("INR", "USD")
+
+    assert result is None
+
+
+def test_get_directed_rate_resolves_cross_pair_through_usd_pivot():
+    def fake_get_current_rate(quote_code):
+        return {"EUR": 0.92, "INR": 85.0}[quote_code]
+
+    with patch(
+        "app.recommendations.supabase_rest.get_current_rate",
+        side_effect=fake_get_current_rate,
+    ):
+        result = get_directed_rate("EUR", "INR")
+
+    assert result == 85.0 / 0.92
+
+
+def test_get_directed_rate_returns_none_when_cross_pair_rate_missing():
+    def fake_get_current_rate(quote_code):
+        return {"EUR": 0.92, "INR": None}[quote_code]
+
+    with patch(
+        "app.recommendations.supabase_rest.get_current_rate",
+        side_effect=fake_get_current_rate,
+    ):
+        result = get_directed_rate("EUR", "INR")
 
     assert result is None
 

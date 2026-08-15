@@ -10,10 +10,10 @@ def main(argv: list[str] | None = None) -> None:
 
     if args.mode == "recommendations":
         count = run_recommendations()
+        print(f"Wrote {count} rows (recommendations)")
     else:
         count = run_alert_evaluation()
-
-    print(f"Wrote {count} rows ({args.mode})")
+        print(f"Fired {count} alerts (alerts)")
 
 
 if __name__ == "__main__":

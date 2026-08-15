@@ -89,6 +89,26 @@ def get_current_rate(quote_code: str) -> float | None:
     return float(rows[0]["rate"]) if rows else None
 
 
+def get_directed_rate(base_code: str, quote_code: str) -> float | None:
+    """Returns the current rate for an arbitrary directed pair, resolving
+    through the USD pivot when neither side is USD. Mirrors the §3
+    reciprocal-direction logic used for recommendations, applied to
+    whichever pair an alert names.
+    """
+    if base_code == quote_code:
+        return 1.0
+    if base_code == "USD":
+        return get_current_rate(quote_code)
+    if quote_code == "USD":
+        base_rate = get_current_rate(base_code)
+        return 1 / base_rate if base_rate is not None else None
+    base_rate = get_current_rate(base_code)
+    quote_rate = get_current_rate(quote_code)
+    if base_rate is None or quote_rate is None:
+        return None
+    return quote_rate / base_rate
+
+
 def insert_recommendations(rows: list[dict]) -> None:
     """Appends a batch of recommendation rows. Plain insert, not upsert --
     recommendations has no unique constraint, matching predictions'
