@@ -1,0 +1,51 @@
+name: Generate predictions
+
+on:
+  schedule:
+    # Daily forecast: 18:00 UTC, an hour after the rates-ingestion cron
+    # (17:00 UTC) so today's rate is already in rates_cache.
+    - cron: '0 18 * * *'
+    # Weekly backtest: Sundays at 19:00 UTC.
+    - cron: '0 19 * * 0'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Prediction mode (leave as auto to infer from schedule, or force one)'
+        required: true
+        default: 'forecast'
+        type: choice
+        options:
+          - forecast
+          - backtest
+
+jobs:
+  predict:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Determine mode
+        id: mode
+        env:
+          DISPATCH_MODE: ${{ github.event.inputs.mode }}
+          CRON_SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          if [ -n "$DISPATCH_MODE" ]; then
+            echo "mode=$DISPATCH_MODE" >> "$GITHUB_OUTPUT"
+          elif [ "$CRON_SCHEDULE" = "0 19 * * 0" ]; then
+            echo "mode=backtest" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=forecast" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Run prediction job
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          MODE: ${{ steps.mode.outputs.mode }}
+        run: python -m app.prediction.cli --mode "$MODE"
