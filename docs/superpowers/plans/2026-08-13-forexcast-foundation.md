@@ -20,8 +20,10 @@
 
 This is the first of several plans implementing the [Phase 1 design spec](../specs/2026-08-13-forex-predictor-design.md). It only covers scaffolding, auth, and deployment — enough to prove the stack works end-to-end. Subsequent plans, each written and executed separately once the prior one is merged:
 
-1. **Data ingestion pipeline (rates only)** — Frankfurter fetcher, `rates_cache` storage, GitHub Actions cron for scheduled refresh + one-time historical backfill. See [design doc](../specs/2026-08-14-data-ingestion-pipeline-design.md).
-2. **Prediction & backtesting engine** — statistical model, confidence bands, low-confidence flagging. Also now owns GDELT (news) and FRED (macro indicator) ingestion, deferred from item 1 above since neither had a consumer until this task exists.
+1. **Data ingestion pipeline (rates only)** — Frankfurter fetcher, `rates_cache` storage, GitHub Actions cron for scheduled refresh + one-time historical backfill. Shipped. See [design doc](../specs/2026-08-14-data-ingestion-pipeline-design.md).
+2. **Prediction & backtesting engine — statistical baseline (2a)** — classical time-series model (ARIMA/exponential smoothing via `statsmodels`) off `rates_cache` alone, backtesting harness producing real measured confidence bands, low-confidence/volatility flagging, writes to the existing `predictions` table, 4 horizons (7/30/90/365-day), daily cron. No new external data sources or LLM calls. Fully self-contained and independently valuable — the honest numeric forecast on its own, before any macro/news adjustment.
+   - **2b — FRED macro regression layer** — FRED ingestion (interest rates, inflation, GDP) + extends 2a's model with an interest-rate-differential regression adjustment. Depends on 2a existing. Was originally bundled with item 1's rates ingestion; deferred because it had no consumer until 2a exists.
+   - **2c — GDELT + LLM news-sentiment layer** — GDELT ingestion + a minimal LLM sentiment/event-scoring call + extends 2a's model with that adjustment. Depends on 2a existing, and needs at least a narrow LLM-calling slice (not necessarily the full multi-provider adapter from item 4 below — that's a separate, larger build). Was originally bundled with item 1's rates ingestion; deferred for the same reason as 2b, one level deeper (its consumer — an LLM call — doesn't exist yet either).
 3. **Recommendation engine & alerts** — ACT NOW/WAIT/VOLATILE logic, manual thresholds.
 4. **LLM agent** — multi-provider adapter, tool-calling, chat.
 5. **Notifications** — Telegram + email in-app linking and dispatch.
