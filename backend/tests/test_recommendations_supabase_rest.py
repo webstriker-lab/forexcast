@@ -1,9 +1,13 @@
 from unittest.mock import MagicMock, patch
 
 from app.recommendations.supabase_rest import (
+    deactivate_alert,
+    get_active_alerts,
     get_current_rate,
     get_latest_predictions,
+    get_latest_two_recommendations,
     insert_recommendations,
+    record_alert_event,
 )
 
 
@@ -113,3 +117,68 @@ def test_insert_recommendations_posts_batch():
     args, kwargs = mock_post.call_args
     assert args[0] == "https://example.supabase.co/rest/v1/recommendations"
     assert kwargs["json"] == rows
+
+
+def test_get_active_alerts_filters_by_is_active():
+    mock_response = MagicMock()
+    mock_response.json.return_value = [
+        {
+            "id": "alert-1",
+            "base_code": "USD",
+            "quote_code": "INR",
+            "alert_type": "threshold",
+            "threshold_rate": 85.0,
+            "direction": "above",
+        }
+    ]
+    mock_response.raise_for_status.return_value = None
+    with patch(
+        "app.recommendations.supabase_rest.httpx.get", return_value=mock_response
+    ) as mock_get:
+        result = get_active_alerts()
+
+    assert len(result) == 1
+    assert result[0]["id"] == "alert-1"
+    args, kwargs = mock_get.call_args
+    assert kwargs["params"]["is_active"] == "eq.true"
+
+
+def test_get_latest_two_recommendations_returns_values_newest_first():
+    mock_response = MagicMock()
+    mock_response.json.return_value = [{"recommendation": "act_now"}, {"recommendation": "wait"}]
+    mock_response.raise_for_status.return_value = None
+    with patch(
+        "app.recommendations.supabase_rest.httpx.get", return_value=mock_response
+    ) as mock_get:
+        result = get_latest_two_recommendations("USD", "INR")
+
+    assert result == ["act_now", "wait"]
+    args, kwargs = mock_get.call_args
+    assert kwargs["params"]["limit"] == 2
+
+
+def test_record_alert_event_posts_event():
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+    with patch(
+        "app.recommendations.supabase_rest.httpx.post", return_value=mock_response
+    ) as mock_post:
+        record_alert_event("alert-1", {"reason": "threshold crossed"})
+
+    args, kwargs = mock_post.call_args
+    assert args[0] == "https://example.supabase.co/rest/v1/alert_events"
+    assert kwargs["json"] == [{"alert_id": "alert-1", "details": {"reason": "threshold crossed"}}]
+
+
+def test_deactivate_alert_patches_is_active_false():
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+    with patch(
+        "app.recommendations.supabase_rest.httpx.patch", return_value=mock_response
+    ) as mock_patch:
+        deactivate_alert("alert-1")
+
+    args, kwargs = mock_patch.call_args
+    assert args[0] == "https://example.supabase.co/rest/v1/alerts"
+    assert kwargs["params"] == {"id": "eq.alert-1"}
+    assert kwargs["json"] == {"is_active": False}

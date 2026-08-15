@@ -105,3 +105,63 @@ def insert_recommendations(rows: list[dict]) -> None:
             timeout=60.0,
         )
         response.raise_for_status()
+
+
+def get_active_alerts() -> list[dict]:
+    """Returns all alerts with is_active=true."""
+    settings = get_settings()
+    response = httpx.get(
+        f"{settings.supabase_url}/rest/v1/alerts",
+        params={
+            "select": "id,base_code,quote_code,alert_type,threshold_rate,direction",
+            "is_active": "eq.true",
+        },
+        headers=_headers(),
+        timeout=30.0,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def get_latest_two_recommendations(base_code: str, quote_code: str) -> list[str]:
+    """Returns up to the 2 most recent `recommendation` values for a
+    directed pair, newest first -- used to detect a recommendation_change.
+    """
+    settings = get_settings()
+    response = httpx.get(
+        f"{settings.supabase_url}/rest/v1/recommendations",
+        params={
+            "select": "recommendation",
+            "base_code": f"eq.{base_code}",
+            "quote_code": f"eq.{quote_code}",
+            "order": "generated_at.desc",
+            "limit": 2,
+        },
+        headers=_headers(),
+        timeout=30.0,
+    )
+    response.raise_for_status()
+    return [row["recommendation"] for row in response.json()]
+
+
+def record_alert_event(alert_id: str, details: dict) -> None:
+    settings = get_settings()
+    response = httpx.post(
+        f"{settings.supabase_url}/rest/v1/alert_events",
+        headers=_headers(),
+        json=[{"alert_id": alert_id, "details": details}],
+        timeout=30.0,
+    )
+    response.raise_for_status()
+
+
+def deactivate_alert(alert_id: str) -> None:
+    settings = get_settings()
+    response = httpx.patch(
+        f"{settings.supabase_url}/rest/v1/alerts",
+        params={"id": f"eq.{alert_id}"},
+        headers=_headers(),
+        json={"is_active": False},
+        timeout=30.0,
+    )
+    response.raise_for_status()
