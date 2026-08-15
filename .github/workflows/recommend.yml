@@ -1,0 +1,43 @@
+name: Generate recommendations
+
+on:
+  schedule:
+    # Daily, after the prediction engine's forecast cron (18:00 UTC) so
+    # today's predictions already exist.
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Mode: "both" (default, matches the daily schedule) or force just one'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - recommendations
+          - alerts
+
+jobs:
+  recommend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Run recommendation job(s)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          MODE: ${{ github.event.inputs.mode || 'both' }}
+        run: |
+          if [ "$MODE" = "both" ]; then
+            python -m app.recommendations.cli --mode recommendations
+            python -m app.recommendations.cli --mode alerts
+          else
+            python -m app.recommendations.cli --mode "$MODE"
+          fi
