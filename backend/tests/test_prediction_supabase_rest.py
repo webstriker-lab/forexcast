@@ -29,7 +29,43 @@ def test_get_rate_series_returns_parallel_date_and_rate_lists():
         "base_code": "eq.USD",
         "quote_code": "eq.EUR",
         "order": "as_of.asc",
+        "limit": 1000,
+        "offset": 0,
     }
+
+
+def test_get_rate_series_paginates_across_multiple_pages():
+    # First page is exactly PAGE_SIZE rows, forcing a second request; second
+    # page is a partial page, which should terminate the loop.
+    page_size = 1000
+    first_page_rows = [
+        {"as_of": f"2020-01-{i:04d}", "rate": 1.0 + i} for i in range(page_size)
+    ]
+    second_page_rows = [
+        {"as_of": "2020-02-01", "rate": 2000.0},
+        {"as_of": "2020-02-02", "rate": 2001.0},
+    ]
+    first_response = MagicMock()
+    first_response.json.return_value = first_page_rows
+    first_response.raise_for_status.return_value = None
+    second_response = MagicMock()
+    second_response.json.return_value = second_page_rows
+    second_response.raise_for_status.return_value = None
+
+    with patch(
+        "app.prediction.supabase_rest.httpx.get",
+        side_effect=[first_response, second_response],
+    ) as mock_get:
+        dates, rates = get_rate_series("EUR")
+
+    assert mock_get.call_count == 2
+    assert len(dates) == page_size + 2
+    assert len(rates) == page_size + 2
+    assert dates[-2:] == ["2020-02-01", "2020-02-02"]
+    assert rates[-2:] == [2000.0, 2001.0]
+
+    second_call_kwargs = mock_get.call_args_list[1].kwargs
+    assert second_call_kwargs["params"]["offset"] == page_size
 
 
 def test_insert_predictions_posts_batch():

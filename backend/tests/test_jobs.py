@@ -29,8 +29,8 @@ def test_run_forecast_builds_prediction_rows_from_backtest_stats():
     assert all(r["confidence"] == "normal" for r in rows)  # 0.01 vol < 0.02 p90
     first = rows[0]
     assert first["predicted_rate"] == 0.91
-    assert first["lower_bound"] == 0.91 + (-0.02)
-    assert first["upper_bound"] == 0.91 + 0.03
+    assert first["lower_bound"] == 0.91 * (1 + (-0.02))
+    assert first["upper_bound"] == 0.91 * (1 + 0.03)
 
 
 def test_run_forecast_flags_low_confidence_when_volatility_exceeds_p90():

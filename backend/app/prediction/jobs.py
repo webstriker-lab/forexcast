@@ -1,3 +1,5 @@
+import logging
+
 from app.ingestion.supabase_rest import get_active_currencies
 from app.prediction.backtest import run_backtest, summarize
 from app.prediction.horizons import trading_day_steps
@@ -9,6 +11,8 @@ from app.prediction.supabase_rest import (
     insert_predictions,
     upsert_backtest_stats,
 )
+
+logger = logging.getLogger(__name__)
 
 PIVOT = "USD"
 HORIZONS = [7, 30, 90, 365]
@@ -27,15 +31,26 @@ def run_forecast() -> int:
     backtest has run) is skipped for that row only, not treated as an
     error.
     """
+    currencies = _predictable_currencies()
     rows = []
-    for quote_code in _predictable_currencies():
+    for quote_code in currencies:
         _dates, rates = get_rate_series(quote_code)
         if len(rates) < 2:
+            logger.warning(
+                "Skipping %s: insufficient rate history (%d rows)",
+                quote_code,
+                len(rates),
+            )
             continue
         current_vol = realized_volatility(rates, len(rates))
         for horizon_days in HORIZONS:
             stats = get_backtest_stats(quote_code, horizon_days)
             if stats is None:
+                logger.info(
+                    "Skipping %s horizon=%d: no backtest_stats yet",
+                    quote_code,
+                    horizon_days,
+                )
                 continue
             steps = trading_day_steps(horizon_days)
             predicted_rate = forecast(rates, steps)
@@ -46,11 +61,17 @@ def run_forecast() -> int:
                     "quote_code": quote_code,
                     "horizon_days": horizon_days,
                     "predicted_rate": predicted_rate,
-                    "lower_bound": predicted_rate + stats["error_lower_pct"],
-                    "upper_bound": predicted_rate + stats["error_upper_pct"],
+                    "lower_bound": predicted_rate * (1 + stats["error_lower_pct"]),
+                    "upper_bound": predicted_rate * (1 + stats["error_upper_pct"]),
                     "confidence": confidence,
                 }
             )
+    if not rows and currencies:
+        logger.warning(
+            "run_forecast produced zero prediction rows despite %d predictable "
+            "currencies -- check backtest_stats is populated",
+            len(currencies),
+        )
     insert_predictions(rows)
     return len(rows)
 
@@ -66,6 +87,11 @@ def run_backtest_job() -> int:
         results = run_backtest(rates, HORIZONS)
         for horizon_days, samples in results.items():
             if not samples["errors"]:
+                logger.info(
+                    "Skipping %s horizon=%d: no backtest samples",
+                    quote_code,
+                    horizon_days,
+                )
                 continue
             summary = summarize(samples)
             rows.append(

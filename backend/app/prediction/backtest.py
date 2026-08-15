@@ -33,7 +33,7 @@ def run_backtest(rates: list[float], horizons: list[int]) -> dict[int, dict]:
                 continue
             predicted = forecast(history, steps)
             actual = rates[target_index]
-            results[horizon_days]["errors"].append(actual - predicted)
+            results[horizon_days]["errors"].append((actual - predicted) / predicted)
             results[horizon_days]["trailing_vols"].append(trailing_vol)
 
     return results

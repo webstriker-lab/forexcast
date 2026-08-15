@@ -3,6 +3,7 @@ import httpx
 from app.config import get_settings
 
 BATCH_SIZE = 500
+PAGE_SIZE = 1000
 
 
 def _headers(prefer: str | None = None) -> dict:
@@ -19,24 +20,37 @@ def _headers(prefer: str | None = None) -> dict:
 def get_rate_series(quote_code: str) -> tuple[list[str], list[float]]:
     """Returns (dates, rates) for `quote_code`'s USD-pivot series, ordered
     oldest to newest -- the same values rates_cache stores for
-    (base_code='USD', quote_code=<quote_code>).
+    (base_code='USD', quote_code=<quote_code>). Paginated explicitly via
+    limit/offset so a full ~27-year history is always returned regardless
+    of the Supabase project's PostgREST max-rows setting -- an unbounded
+    single request would silently truncate to the oldest PAGE_SIZE rows if
+    that setting is more restrictive than the true row count.
     """
     settings = get_settings()
-    response = httpx.get(
-        f"{settings.supabase_url}/rest/v1/rates_cache",
-        params={
-            "select": "as_of,rate",
-            "base_code": "eq.USD",
-            "quote_code": f"eq.{quote_code}",
-            "order": "as_of.asc",
-        },
-        headers=_headers(),
-        timeout=30.0,
-    )
-    response.raise_for_status()
-    rows = response.json()
-    dates = [row["as_of"] for row in rows]
-    rates = [float(row["rate"]) for row in rows]
+    dates: list[str] = []
+    rates: list[float] = []
+    offset = 0
+    while True:
+        response = httpx.get(
+            f"{settings.supabase_url}/rest/v1/rates_cache",
+            params={
+                "select": "as_of,rate",
+                "base_code": "eq.USD",
+                "quote_code": f"eq.{quote_code}",
+                "order": "as_of.asc",
+                "limit": PAGE_SIZE,
+                "offset": offset,
+            },
+            headers=_headers(),
+            timeout=30.0,
+        )
+        response.raise_for_status()
+        rows = response.json()
+        dates.extend(row["as_of"] for row in rows)
+        rates.extend(float(row["rate"]) for row in rows)
+        if len(rows) < PAGE_SIZE:
+            break
+        offset += PAGE_SIZE
     return dates, rates
 
 
