@@ -21,21 +21,21 @@ Turn the raw forecasts already in `predictions` into an actionable signal — no
 
 ## 3. Direction Handling
 
-`predictions` only stores the USD→X direction (e.g. USD→INR: units of INR per 1 USD). A high rate is favorable for someone converting USD *into* INR (a remittance sender); a low rate is favorable for someone converting INR *into* USD (e.g. paying off a USD-denominated debt with INR earnings) — same underlying forecast, opposite meaning of "favorable."
+`predictions` only stores the USD→X direction (e.g. USD→INR: units of INR per 1 USD). A high USD→X rate is favorable for someone converting USD *into* INR (a remittance sender); a low USD→X rate is favorable for someone converting INR *into* USD (e.g. paying off a USD-denominated debt with INR earnings) — same underlying forecast, opposite meaning of "favorable," **stated here in USD→X terms**.
 
-This task computes recommendations for **both directions** from the same 29×4 prediction rows:
-- `(base_code='USD', quote_code=X)`: favorable = higher rate.
-- `(base_code=X, quote_code='USD')`: favorable = lower rate. Its `current_rate`/`expected_rate`/bounds are the simple reciprocal (`1 / value`) of the USD→X figures — a plain reciprocal, not `cross_rate()`, since one side is always USD here (no third-currency pivot involved). Inverting a range flips its order: the new lower bound is `1 / (USD→X upper bound)`, the new upper bound is `1 / (USD→X lower bound)`, since reciprocal is a decreasing function for positive numbers.
+This task computes recommendations for **both directions** from the same 29×4 prediction rows. §4's algorithm always operates on a pair's *own stored value-space* — it never re-derives favorability by looking at the other direction's numbers:
+
+- `(base_code='USD', quote_code=X)`: stores the USD→X figures as-is. Favorable = higher rate, in USD→X units.
+- `(base_code=X, quote_code='USD')`: stores the simple reciprocal (`1 / value`) of the USD→X figures — a plain reciprocal, not `cross_rate()`, since one side is always USD here (no third-currency pivot involved). Inverting a range flips its order: the new lower bound is `1 / (USD→X upper bound)`, the new upper bound is `1 / (USD→X lower bound)`, since reciprocal is a decreasing function for positive numbers. **In this row's own reciprocal units, favorable is also the higher value** — a higher X→USD figure means more USD received per unit of X, the same real-world outcome as a *low* USD→X rate, just re-expressed. The "low is favorable" language above describes the underlying economics in USD→X terms; once the numbers are inverted into the X→USD row's own units, §4 treats high as favorable for both rows identically.
 
 ## 4. Recommendation Algorithm
 
 One recommendation per directed pair per day, synthesized across that pair's 4 horizon predictions (7/30/90/365) from the same day's forecast batch — not 4 separate per-horizon recommendations. This matches the product spec's "WAIT (~N days)" phrasing, which names a single horizon, not four.
 
-1. Among the pair's 4 horizons, find the **reference horizon**: whichever one the model expects the most favorable rate at (highest predicted rate for USD→X, lowest for X→USD).
-2. Compare today's actual current rate to the reference horizon's predicted rate, direction-aware:
-   - USD→X (favorable = high): `current_rate >= reference predicted_rate` → **`act_now`** (today is already as good as or better than what the model expects later).
-   - X→USD (favorable = low): `current_rate <= reference predicted_rate` → **`act_now`**.
-   - Otherwise (current rate is still on the *unfavorable* side of the reference prediction) → **`wait`**, with the reference horizon's day-count as "~N days" and its predicted rate + band as the target to watch for.
+Both directed pairs are evaluated with the **same** rule below, applied to that pair's own stored value-space from §3 (for X→USD, that means every horizon's predicted_rate/lower_bound/upper_bound has already been inverted, and `current_rate` is `1 / (USD→X current rate)`, before this algorithm runs). There is no separate "favorable low" branch — the reciprocal transform in §3 is what encodes the direction; the comparison logic itself is identical for both rows.
+
+1. Among the pair's 4 horizons (already in the pair's own value-space), find the **reference horizon**: whichever one the model expects the highest rate at.
+2. Compare today's current rate (also already in the pair's own value-space) to the reference horizon's predicted rate: `current_rate >= reference predicted_rate` → **`act_now`** (today is already as good as or better than what the model expects later); otherwise (current rate is still below the reference prediction) → **`wait`**, with the reference horizon's day-count as "~N days" and its predicted rate + band as the target to watch for.
 3. If the reference horizon's `confidence` is `'low'` → **`volatile`**, overriding the above. This reuses the prediction engine's existing per-currency volatility flag directly — no new confidence logic is computed here.
 
 If fewer than 4 horizons exist for a pair on a given day (e.g. a currency was skipped that day because its `backtest_stats` weren't ready yet — an already-established, expected gap from the prediction engine), the algorithm just works with whichever horizons are present; if none are present for that pair that day, it's skipped for that run, not treated as an error.
