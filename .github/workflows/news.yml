@@ -1,0 +1,31 @@
+# .github/workflows/news.yml
+name: Score news sentiment
+
+on:
+  schedule:
+    # Daily, 17:45 UTC -- 15 minutes before predict.yml's daily forecast
+    # cron (18:00 UTC), so today's sentiment is already in
+    # news_sentiment when run_forecast reads it.
+    - cron: '45 17 * * *'
+  workflow_dispatch:
+
+jobs:
+  score-news:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Run news sentiment job
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
+        run: python -m app.news.cli
