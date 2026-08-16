@@ -1,6 +1,7 @@
 # backend/tests/test_jobs.py
 from unittest.mock import patch
 
+from app.prediction.backtest import summarize
 from app.prediction.jobs import run_backtest_job, run_forecast
 
 
@@ -194,3 +195,85 @@ def test_run_backtest_job_aligns_and_passes_differentials():
         run_backtest_job()
 
     assert captured["differentials"] == [0.04, 0.04]  # 0.05 - 0.01, forward-filled
+
+
+def test_backtest_and_forecast_regression_contract_are_compatible():
+    """Integration check: the dict run_backtest_job would write to
+    backtest_stats (built from a REAL summarize() call, not a mock) and
+    the dict run_forecast reads back via get_backtest_stats must be the
+    same shape, and a real fitted regression must genuinely be picked up
+    and applied -- not just individually plausible in each function's
+    own isolated unit tests.
+    """
+    import random
+
+    random.seed(42)
+    differentials = [i * 0.2 - 2.0 for i in range(30)]
+    errors = [0.004 * d - 0.01 + random.uniform(-0.002, 0.002) for d in differentials]
+    samples = {
+        "errors": errors,
+        "trailing_vols": [0.01] * 30,
+        "differentials": differentials,
+    }
+    summary = summarize(samples)
+    assert summary["regression_slope"] is not None  # sanity: fixture actually fits
+
+    stats_dict_shape = {
+        "error_lower_pct": summary["error_lower_pct"],
+        "error_upper_pct": summary["error_upper_pct"],
+        "volatility_p90": summary["volatility_p90"],
+        "regression_slope": summary["regression_slope"],
+        "regression_intercept": summary["regression_intercept"],
+    }
+
+    with patch(
+        "app.prediction.jobs.get_active_currencies", return_value=["USD", "EUR"]
+    ), patch(
+        "app.prediction.jobs.get_rate_series",
+        return_value=(["2020-01-01"] * 100, [0.9] * 100),
+    ), patch(
+        "app.prediction.jobs.forecast", return_value=0.91
+    ), patch(
+        "app.prediction.jobs.realized_volatility", return_value=0.01
+    ), patch(
+        "app.prediction.jobs.get_backtest_stats", return_value=stats_dict_shape
+    ), patch(
+        "app.prediction.jobs.get_latest_macro_rate",
+        side_effect=lambda code: 0.06 if code == "EUR" else 0.01,  # differential = 0.05
+    ), patch("app.prediction.jobs.insert_predictions") as mock_insert:
+        run_forecast()
+
+    rows = mock_insert.call_args[0][0]
+    expected_predicted = 0.91 * (
+        1 + (summary["regression_slope"] * 0.05 + summary["regression_intercept"])
+    )
+    assert rows[0]["predicted_rate"] == expected_predicted
+
+
+def test_run_forecast_skips_adjustment_when_multiplier_is_non_positive():
+    with patch(
+        "app.prediction.jobs.get_active_currencies", return_value=["USD", "EUR"]
+    ), patch(
+        "app.prediction.jobs.get_rate_series",
+        return_value=(["2020-01-01"] * 100, [0.9] * 100),
+    ), patch(
+        "app.prediction.jobs.forecast", return_value=0.91
+    ), patch(
+        "app.prediction.jobs.realized_volatility", return_value=0.01
+    ), patch(
+        "app.prediction.jobs.get_backtest_stats",
+        return_value={
+            "error_lower_pct": -0.02,
+            "error_upper_pct": 0.03,
+            "volatility_p90": 0.02,
+            "regression_slope": -100.0,  # engineered to force a non-positive multiplier
+            "regression_intercept": -0.01,
+        },
+    ), patch(
+        "app.prediction.jobs.get_latest_macro_rate",
+        side_effect=lambda code: 0.06 if code == "EUR" else 0.01,  # differential = 0.05
+    ), patch("app.prediction.jobs.insert_predictions") as mock_insert:
+        run_forecast()
+
+    rows = mock_insert.call_args[0][0]
+    assert rows[0]["predicted_rate"] == 0.91  # unadjusted -- multiplier would've been negative

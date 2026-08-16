@@ -1,3 +1,4 @@
+from datetime import date, timedelta
 from unittest.mock import MagicMock, patch
 
 from app.macro.supabase_rest import (
@@ -67,8 +68,9 @@ def test_get_macro_rate_series_paginates():
 
 
 def test_get_latest_macro_rate_returns_most_recent_value():
+    recent = (date.today() - timedelta(days=10)).isoformat()
     mock_response = MagicMock()
-    mock_response.json.return_value = [{"rate": 0.75}]
+    mock_response.json.return_value = [{"as_of": recent, "rate": 0.75}]
     mock_response.raise_for_status.return_value = None
     with patch(
         "app.macro.supabase_rest.httpx.get", return_value=mock_response
@@ -77,6 +79,7 @@ def test_get_latest_macro_rate_returns_most_recent_value():
 
     assert result == 0.75
     args, kwargs = mock_get.call_args
+    assert kwargs["params"]["select"] == "as_of,rate"
     assert kwargs["params"]["order"] == "as_of.desc"
     assert kwargs["params"]["limit"] == 1
 
@@ -84,6 +87,17 @@ def test_get_latest_macro_rate_returns_most_recent_value():
 def test_get_latest_macro_rate_returns_none_when_no_data():
     mock_response = MagicMock()
     mock_response.json.return_value = []
+    mock_response.raise_for_status.return_value = None
+    with patch("app.macro.supabase_rest.httpx.get", return_value=mock_response):
+        result = get_latest_macro_rate("EUR")
+
+    assert result is None
+
+
+def test_get_latest_macro_rate_returns_none_when_stale():
+    stale = (date.today() - timedelta(days=1000)).isoformat()
+    mock_response = MagicMock()
+    mock_response.json.return_value = [{"as_of": stale, "rate": 0.75}]
     mock_response.raise_for_status.return_value = None
     with patch("app.macro.supabase_rest.httpx.get", return_value=mock_response):
         result = get_latest_macro_rate("EUR")

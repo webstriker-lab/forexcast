@@ -65,7 +65,7 @@ def fit_regression(
     errors: list[float],
     differentials: list[float],
     min_samples: int = 24,
-    p_threshold: float = 0.10,
+    p_threshold: float = 0.01,
 ) -> dict | None:
     """Fits `relative_error ~ a + b * differential` via ordinary least
     squares. Returns None -- meaning "not enough evidence this
@@ -74,6 +74,15 @@ def fit_regression(
     the fitted slope's p-value doesn't clear `p_threshold`. `errors` and
     `differentials` must already be paired 1:1 (equal length, no None
     entries) -- callers filter out unpaired samples before calling this.
+
+    Known limitation: this p-value assumes independent samples, but
+    backtest origins are spaced ORIGIN_SPACING (30) trading days apart
+    while a horizon can span many more steps than that (e.g. 261 for the
+    365-day horizon) -- consecutive samples' outcome windows overlap, so
+    the true effective sample size is smaller than len(errors) and this
+    p-value understates the real uncertainty, especially at longer
+    horizons. p_threshold is set conservatively (0.01, not the
+    textbook-standard 0.05 or a looser 0.10) partly to compensate.
     """
     if len(errors) < min_samples:
         return None

@@ -1,9 +1,12 @@
+from datetime import date as _date
+
 import httpx
 
 from app.config import get_settings
 
 BATCH_SIZE = 500
 PAGE_SIZE = 1000
+MAX_STALENESS_DAYS = 548
 
 
 def _headers(prefer: str | None = None) -> dict:
@@ -62,7 +65,7 @@ def get_latest_macro_rate(currency_code: str) -> float | None:
     response = httpx.get(
         f"{settings.supabase_url}/rest/v1/macro_rates",
         params={
-            "select": "rate",
+            "select": "as_of,rate",
             "currency_code": f"eq.{currency_code}",
             "order": "as_of.desc",
             "limit": 1,
@@ -72,4 +75,9 @@ def get_latest_macro_rate(currency_code: str) -> float | None:
     )
     response.raise_for_status()
     rows = response.json()
-    return float(rows[0]["rate"]) if rows else None
+    if not rows:
+        return None
+    as_of = _date.fromisoformat(rows[0]["as_of"])
+    if (_date.today() - as_of).days > MAX_STALENESS_DAYS:
+        return None
+    return float(rows[0]["rate"])

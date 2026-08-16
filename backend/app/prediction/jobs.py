@@ -41,6 +41,7 @@ def run_forecast() -> int:
     as in 2a.
     """
     currencies = _predictable_currencies()
+    usd_rate = get_latest_macro_rate(PIVOT)
     rows = []
     for quote_code in currencies:
         _dates, rates = get_rate_series(quote_code)
@@ -54,7 +55,6 @@ def run_forecast() -> int:
         current_vol = realized_volatility(rates, len(rates))
 
         foreign_rate = get_latest_macro_rate(quote_code)
-        usd_rate = get_latest_macro_rate(PIVOT)
         current_differential = (
             foreign_rate - usd_rate
             if foreign_rate is not None and usd_rate is not None
@@ -73,10 +73,20 @@ def run_forecast() -> int:
             steps = trading_day_steps(horizon_days)
             predicted_rate = forecast(rates, steps)
             if stats["regression_slope"] is not None and current_differential is not None:
-                predicted_rate *= 1 + (
+                multiplier = 1 + (
                     stats["regression_slope"] * current_differential
                     + stats["regression_intercept"]
                 )
+                if multiplier > 0:
+                    predicted_rate *= multiplier
+                else:
+                    logger.warning(
+                        "Skipping regression adjustment for %s horizon=%d: "
+                        "computed multiplier %.4f is non-positive",
+                        quote_code,
+                        horizon_days,
+                        multiplier,
+                    )
             confidence = "low" if current_vol > stats["volatility_p90"] else "normal"
             rows.append(
                 {
@@ -114,10 +124,10 @@ def run_backtest_job() -> int:
     2a's behavior for that currency.
     """
     rows = []
+    usd_observations = get_macro_rate_series(PIVOT)
     for quote_code in _predictable_currencies():
         dates, rates = get_rate_series(quote_code)
 
-        usd_observations = get_macro_rate_series(PIVOT)
         foreign_observations = get_macro_rate_series(quote_code)
         usd_aligned = align_as_of(dates, usd_observations)
         foreign_aligned = align_as_of(dates, foreign_observations)

@@ -21,3 +21,21 @@ def test_align_as_of_empty_observations_returns_all_none():
 
 def test_align_as_of_empty_dates_returns_empty_list():
     assert align_as_of([], [("2020-01-01", 1.0)]) == []
+
+
+def test_align_as_of_returns_none_for_stale_observation():
+    dates = ["2025-01-01"]
+    observations = [("2020-01-01", 5.0)]  # ~5 years stale
+    assert align_as_of(dates, observations) == [None]
+
+
+def test_align_as_of_keeps_observation_within_staleness_window():
+    dates = ["2020-06-01"]
+    observations = [("2020-01-01", 5.0)]  # ~5 months, within 548-day default
+    assert align_as_of(dates, observations) == [5.0]
+
+
+def test_align_as_of_respects_custom_max_staleness_days():
+    dates = ["2020-02-01"]
+    observations = [("2020-01-01", 5.0)]  # 31 days
+    assert align_as_of(dates, observations, max_staleness_days=10) == [None]
