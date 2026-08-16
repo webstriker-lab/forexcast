@@ -50,6 +50,10 @@ def get_latest_news_sentiment(currency_code: str) -> dict | None:
     if not rows:
         return None
     row = rows[0]
+    # Deliberately stricter than app.macro's 548-day staleness window --
+    # that one tolerates FRED's monthly publication cadence, but a news
+    # sentiment reading is a daily signal: anything not dated exactly
+    # today is meaningless as "today's shock," not just stale.
     if row["as_of"] != date.today().isoformat():
         return None
     return {"score": float(row["score"]), "summary": row["summary"]}

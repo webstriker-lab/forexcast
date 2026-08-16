@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from app.news.gdelt_client import fetch_articles
+from app.news.gdelt_client import MAX_RETRIES, fetch_articles
 
 
 def test_fetch_articles_returns_article_list():
@@ -69,3 +69,39 @@ def test_fetch_articles_propagates_server_errors():
             assert False, "expected HTTPStatusError to propagate"
         except httpx.HTTPStatusError:
             pass
+
+
+def test_fetch_articles_retries_on_429_then_succeeds():
+    rate_limited = MagicMock()
+    rate_limited.status_code = 429
+    success = MagicMock()
+    success.status_code = 200
+    success.raise_for_status.return_value = None
+    success.json.return_value = {"articles": [{"title": "Recovered after retry"}]}
+    with patch(
+        "app.news.gdelt_client.httpx.get", side_effect=[rate_limited, success]
+    ) as mock_get, patch("app.news.gdelt_client.time.sleep"):
+        result = fetch_articles("Turkey")
+
+    assert result == [{"title": "Recovered after retry"}]
+    assert mock_get.call_count == 2
+
+
+def test_fetch_articles_propagates_after_exhausting_retries():
+    import httpx
+
+    rate_limited = MagicMock()
+    rate_limited.status_code = 429
+    rate_limited.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "rate limited", request=MagicMock(), response=rate_limited
+    )
+    with patch(
+        "app.news.gdelt_client.httpx.get", return_value=rate_limited
+    ) as mock_get, patch("app.news.gdelt_client.time.sleep"):
+        try:
+            fetch_articles("Turkey")
+            assert False, "expected HTTPStatusError to propagate"
+        except httpx.HTTPStatusError:
+            pass
+
+    assert mock_get.call_count == 1 + MAX_RETRIES

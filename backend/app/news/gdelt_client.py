@@ -1,8 +1,12 @@
+import time
+
 import httpx
 
 GDELT_BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 ECON_THEMES = ["ECON_CURRENCY", "ECON_CENTRALBANK", "ECON_INTERESTRATES", "ECON_INFLATION"]
 MAX_RECORDS = 30
+MAX_RETRIES = 3
+RETRY_BACKOFF_SECONDS = 3
 
 
 def fetch_articles(country_query: str) -> list[dict]:
@@ -11,8 +15,9 @@ def fetch_articles(country_query: str) -> list[dict]:
     ECON_* theme taxonomy combined with a plain keyword for the
     country's proper name. Returns [] for zero results -- GDELT
     returning nothing for a given day/country is a normal outcome, not
-    an error. Network failures, rate-limiting, and any non-2xx response
-    propagate -- those are unexpected and should fail the job loudly.
+    an error. Network failures and any non-2xx response other than a
+    retried-and-still-failing 429 propagate -- those are unexpected and
+    should fail the job loudly.
 
     Response shape confirmed live against the DOC 2.0 API: results come
     back as {"articles": [...]}, each article carrying at least "title"
@@ -23,20 +28,27 @@ def fetch_articles(country_query: str) -> list[dict]:
     GDELT also requires parenthesized theme groups to be OR'd (a lone
     "(theme:X)" is rejected as a syntax error) -- satisfied here since
     ECON_THEMES is always joined with " OR ".
+
+    GDELT rate-limits more aggressively in practice than documented
+    (confirmed during this plan's own live testing) -- a 429 is retried
+    up to MAX_RETRIES times with linear backoff before propagating as a
+    real failure.
     """
     theme_filter = " OR ".join(f"theme:{t}" for t in ECON_THEMES)
     query = f"({theme_filter}) {country_query}"
-    response = httpx.get(
-        GDELT_BASE_URL,
-        params={
-            "query": query,
-            "mode": "artlist",
-            "format": "json",
-            "maxrecords": MAX_RECORDS,
-            "timespan": "48h",
-        },
-        timeout=30.0,
-    )
+    params = {
+        "query": query,
+        "mode": "artlist",
+        "format": "json",
+        "maxrecords": MAX_RECORDS,
+        "timespan": "48h",
+    }
+    response = httpx.get(GDELT_BASE_URL, params=params, timeout=30.0)
+    for attempt in range(MAX_RETRIES):
+        if response.status_code != 429:
+            break
+        time.sleep(RETRY_BACKOFF_SECONDS * (attempt + 1))
+        response = httpx.get(GDELT_BASE_URL, params=params, timeout=30.0)
     response.raise_for_status()
     data = response.json()
     return data.get("articles", [])

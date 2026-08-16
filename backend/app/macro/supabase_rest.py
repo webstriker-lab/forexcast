@@ -6,6 +6,9 @@ from app.config import get_settings
 
 BATCH_SIZE = 500
 PAGE_SIZE = 1000
+# Same 548-day (~18 month) staleness window as app.macro.align.align_as_of,
+# applied here to the single latest-row lookup: tolerates FRED's monthly
+# publication cadence while still catching a genuinely discontinued series.
 MAX_STALENESS_DAYS = 548
 
 

@@ -64,6 +64,8 @@ def run_forecast() -> int:
         )
 
         sentiment = get_latest_news_sentiment(quote_code)
+        if sentiment is None:
+            logger.info("No news sentiment available today for %s", quote_code)
         news_shock = sentiment is not None and abs(sentiment["score"]) >= 0.7
 
         for horizon_days in HORIZONS:

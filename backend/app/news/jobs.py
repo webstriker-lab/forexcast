@@ -21,9 +21,17 @@ def run_news_sentiment() -> int:
     of the run -- one bad completion shouldn't starve every other
     currency, matching the recommendation-engine plan's per-alert
     isolation fix.
+
+    Each currency's row is upserted immediately after it's computed
+    (not batched to the end of the loop) so that a real infrastructure
+    failure partway through the run -- which still propagates and fails
+    the job, per this app's fail-loud philosophy -- doesn't discard the
+    currencies that already succeeded before it.
     """
-    rows = []
+    count = 0
     today = date.today().isoformat()
+    if not COUNTRY_NAMES:
+        logger.warning("run_news_sentiment has no mapped currencies to score")
     for currency_code, country_name in COUNTRY_NAMES.items():
         articles = fetch_articles(country_name)
         if len(articles) < MIN_ARTICLES:
@@ -34,21 +42,29 @@ def run_news_sentiment() -> int:
                 MIN_ARTICLES,
             )
             continue
-        result = score_sentiment(articles)
+        result = score_sentiment(articles, country_name)
         if result is None:
             logger.warning(
                 "Skipping %s: LLM response did not parse into the expected shape",
                 currency_code,
             )
             continue
-        rows.append(
-            {
-                "currency_code": currency_code,
-                "as_of": today,
-                "score": result["score"],
-                "summary": result["summary"],
-                "article_count": len(articles),
-            }
+        upsert_news_sentiment(
+            [
+                {
+                    "currency_code": currency_code,
+                    "as_of": today,
+                    "score": result["score"],
+                    "summary": result["summary"],
+                    "article_count": len(articles),
+                }
+            ]
         )
-    upsert_news_sentiment(rows)
-    return len(rows)
+        count += 1
+    if count == 0 and COUNTRY_NAMES:
+        logger.warning(
+            "run_news_sentiment produced zero rows despite %d mapped currencies "
+            "-- check GDELT query syntax and the configured LLM provider",
+            len(COUNTRY_NAMES),
+        )
+    return count

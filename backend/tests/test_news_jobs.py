@@ -21,7 +21,10 @@ def test_run_news_sentiment_scores_and_upserts_currencies_with_enough_coverage()
         count = run_news_sentiment()
 
     assert count == 2
-    rows = mock_upsert.call_args[0][0]
+    # Each currency is upserted immediately (one call per currency, each
+    # with a single-row list), not batched into one call at the end.
+    assert mock_upsert.call_count == 2
+    rows = [row for call in mock_upsert.call_args_list for row in call[0][0]]
     try_row = next(r for r in rows if r["currency_code"] == "TRY")
     assert try_row["score"] == -0.6
     assert try_row["summary"] == "Negative."
@@ -39,14 +42,16 @@ def test_run_news_sentiment_skips_currency_with_too_few_articles():
 
     assert count == 0
     mock_score.assert_not_called()
-    mock_upsert.assert_called_once_with([])
+    # No currency reached the upsert call -- upsert_news_sentiment is only
+    # invoked incrementally, per successfully-scored currency.
+    mock_upsert.assert_not_called()
 
 
 def test_run_news_sentiment_skips_currency_with_unparseable_llm_response_but_continues():
     fake_countries = {"TRY": "Turkey", "EUR": "Eurozone"}
     fake_articles = {c: [{"title": f"h{i}"} for i in range(5)] for c in fake_countries.values()}
 
-    def fake_score(articles):
+    def fake_score(articles, country_name):
         # First call (Turkey) returns None; second call (Eurozone) succeeds.
         if fake_score.calls == 0:
             fake_score.calls += 1

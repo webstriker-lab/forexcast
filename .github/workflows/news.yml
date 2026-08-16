@@ -3,10 +3,12 @@ name: Score news sentiment
 
 on:
   schedule:
-    # Daily, 17:45 UTC -- 15 minutes before predict.yml's daily forecast
-    # cron (18:00 UTC), so today's sentiment is already in
-    # news_sentiment when run_forecast reads it.
-    - cron: '45 17 * * *'
+    # Daily, 17:10 UTC -- 50 minutes before predict.yml's daily forecast
+    # cron (18:00 UTC). Widened from an earlier 15-minute gap: this job
+    # can run up to 29 sequential GDELT + LLM calls (with retry/backoff
+    # on GDELT rate-limiting), so it needs real headroom, not the tight
+    # gap that's fine for this repo's other single-purpose jobs.
+    - cron: '10 17 * * *'
   workflow_dispatch:
 
 jobs:
