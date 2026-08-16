@@ -4,6 +4,7 @@ import logging
 from app.ingestion.supabase_rest import get_active_currencies
 from app.macro.align import align_as_of
 from app.macro.supabase_rest import get_latest_macro_rate, get_macro_rate_series
+from app.news.supabase_rest import get_latest_news_sentiment
 from app.prediction.backtest import run_backtest, summarize
 from app.prediction.horizons import trading_day_steps
 from app.prediction.model import forecast
@@ -38,7 +39,8 @@ def run_forecast() -> int:
     AND today's current interest-rate differential is available, the
     baseline point forecast is adjusted by that regression before the
     confidence band is applied -- otherwise the baseline is used exactly
-    as in 2a.
+    as in 2a. Confidence is also flagged low when today's news sentiment
+    for that currency is a shock (|score| >= 0.7), independent of volatility.
     """
     currencies = _predictable_currencies()
     usd_rate = get_latest_macro_rate(PIVOT)
@@ -60,6 +62,9 @@ def run_forecast() -> int:
             if foreign_rate is not None and usd_rate is not None
             else None
         )
+
+        sentiment = get_latest_news_sentiment(quote_code)
+        news_shock = sentiment is not None and abs(sentiment["score"]) >= 0.7
 
         for horizon_days in HORIZONS:
             stats = get_backtest_stats(quote_code, horizon_days)
@@ -87,7 +92,9 @@ def run_forecast() -> int:
                         horizon_days,
                         multiplier,
                     )
-            confidence = "low" if current_vol > stats["volatility_p90"] else "normal"
+            confidence = (
+                "low" if (current_vol > stats["volatility_p90"] or news_shock) else "normal"
+            )
             rows.append(
                 {
                     "base_code": PIVOT,

@@ -26,6 +26,8 @@ def test_run_forecast_builds_prediction_rows_from_backtest_stats():
         },
     ), patch(
         "app.prediction.jobs.get_latest_macro_rate", return_value=None
+    ), patch(
+        "app.prediction.jobs.get_latest_news_sentiment", return_value=None
     ), patch("app.prediction.jobs.insert_predictions") as mock_insert:
         count = run_forecast()
 
@@ -60,6 +62,8 @@ def test_run_forecast_flags_low_confidence_when_volatility_exceeds_p90():
         },
     ), patch(
         "app.prediction.jobs.get_latest_macro_rate", return_value=None
+    ), patch(
+        "app.prediction.jobs.get_latest_news_sentiment", return_value=None
     ), patch("app.prediction.jobs.insert_predictions") as mock_insert:
         run_forecast()
 
@@ -81,6 +85,8 @@ def test_run_forecast_skips_horizon_with_no_backtest_stats_yet():
         "app.prediction.jobs.get_backtest_stats", return_value=None
     ), patch(
         "app.prediction.jobs.get_latest_macro_rate", return_value=None
+    ), patch(
+        "app.prediction.jobs.get_latest_news_sentiment", return_value=None
     ), patch("app.prediction.jobs.insert_predictions") as mock_insert:
         count = run_forecast()
 
@@ -110,6 +116,8 @@ def test_run_forecast_applies_regression_when_stored_and_current_differential_kn
     ), patch(
         "app.prediction.jobs.get_latest_macro_rate",
         side_effect=lambda code: 0.06 if code == "EUR" else 0.01,  # differential = 0.05
+    ), patch(
+        "app.prediction.jobs.get_latest_news_sentiment", return_value=None
     ), patch("app.prediction.jobs.insert_predictions") as mock_insert:
         run_forecast()
 
@@ -141,6 +149,8 @@ def test_run_forecast_skips_adjustment_when_current_differential_unknown():
         },
     ), patch(
         "app.prediction.jobs.get_latest_macro_rate", return_value=None
+    ), patch(
+        "app.prediction.jobs.get_latest_news_sentiment", return_value=None
     ), patch("app.prediction.jobs.insert_predictions") as mock_insert:
         run_forecast()
 
@@ -240,6 +250,8 @@ def test_backtest_and_forecast_regression_contract_are_compatible():
     ), patch(
         "app.prediction.jobs.get_latest_macro_rate",
         side_effect=lambda code: 0.06 if code == "EUR" else 0.01,  # differential = 0.05
+    ), patch(
+        "app.prediction.jobs.get_latest_news_sentiment", return_value=None
     ), patch("app.prediction.jobs.insert_predictions") as mock_insert:
         run_forecast()
 
@@ -272,8 +284,72 @@ def test_run_forecast_skips_adjustment_when_multiplier_is_non_positive():
     ), patch(
         "app.prediction.jobs.get_latest_macro_rate",
         side_effect=lambda code: 0.06 if code == "EUR" else 0.01,  # differential = 0.05
+    ), patch(
+        "app.prediction.jobs.get_latest_news_sentiment", return_value=None
     ), patch("app.prediction.jobs.insert_predictions") as mock_insert:
         run_forecast()
 
     rows = mock_insert.call_args[0][0]
     assert rows[0]["predicted_rate"] == 0.91  # unadjusted -- multiplier would've been negative
+
+
+def test_run_forecast_flags_low_confidence_on_news_shock_even_with_normal_volatility():
+    with patch(
+        "app.prediction.jobs.get_active_currencies", return_value=["USD", "EUR"]
+    ), patch(
+        "app.prediction.jobs.get_rate_series",
+        return_value=(["2020-01-01"] * 100, [0.9] * 100),
+    ), patch(
+        "app.prediction.jobs.forecast", return_value=0.91
+    ), patch(
+        "app.prediction.jobs.realized_volatility", return_value=0.01
+    ), patch(
+        "app.prediction.jobs.get_backtest_stats",
+        return_value={
+            "error_lower_pct": -0.02,
+            "error_upper_pct": 0.03,
+            "volatility_p90": 0.02,
+            "regression_slope": None,
+            "regression_intercept": None,
+        },
+    ), patch(
+        "app.prediction.jobs.get_latest_macro_rate", return_value=None
+    ), patch(
+        "app.prediction.jobs.get_latest_news_sentiment",
+        return_value={"score": -0.85, "summary": "Major shock event."},
+    ), patch("app.prediction.jobs.insert_predictions") as mock_insert:
+        run_forecast()
+
+    rows = mock_insert.call_args[0][0]
+    assert all(r["confidence"] == "low" for r in rows)  # 0.01 vol is normal, but |-0.85| >= 0.7
+
+
+def test_run_forecast_stays_normal_confidence_for_mild_sentiment():
+    with patch(
+        "app.prediction.jobs.get_active_currencies", return_value=["USD", "EUR"]
+    ), patch(
+        "app.prediction.jobs.get_rate_series",
+        return_value=(["2020-01-01"] * 100, [0.9] * 100),
+    ), patch(
+        "app.prediction.jobs.forecast", return_value=0.91
+    ), patch(
+        "app.prediction.jobs.realized_volatility", return_value=0.01
+    ), patch(
+        "app.prediction.jobs.get_backtest_stats",
+        return_value={
+            "error_lower_pct": -0.02,
+            "error_upper_pct": 0.03,
+            "volatility_p90": 0.02,
+            "regression_slope": None,
+            "regression_intercept": None,
+        },
+    ), patch(
+        "app.prediction.jobs.get_latest_macro_rate", return_value=None
+    ), patch(
+        "app.prediction.jobs.get_latest_news_sentiment",
+        return_value={"score": 0.2, "summary": "Routine coverage."},
+    ), patch("app.prediction.jobs.insert_predictions") as mock_insert:
+        run_forecast()
+
+    rows = mock_insert.call_args[0][0]
+    assert all(r["confidence"] == "normal" for r in rows)  # |0.2| < 0.7, volatility also normal
