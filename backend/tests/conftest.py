@@ -15,3 +15,4 @@ def pytest_configure(config):
     os.environ["SUPABASE_URL"] = "https://example.supabase.co"
     os.environ["SUPABASE_SERVICE_KEY"] = "test-service-key"
     os.environ["FRONTEND_ORIGIN"] = "http://localhost:5173"
+    os.environ["FRED_API_KEY"] = "test-fred-key"
