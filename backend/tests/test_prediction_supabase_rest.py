@@ -96,7 +96,13 @@ def test_insert_predictions_posts_batch():
 def test_get_backtest_stats_returns_stats_when_found():
     mock_response = MagicMock()
     mock_response.json.return_value = [
-        {"error_lower_pct": -0.02, "error_upper_pct": 0.03, "volatility_p90": 0.015}
+        {
+            "error_lower_pct": -0.02,
+            "error_upper_pct": 0.03,
+            "volatility_p90": 0.015,
+            "regression_slope": 0.004,
+            "regression_intercept": -0.01,
+        }
     ]
     mock_response.raise_for_status.return_value = None
     with patch(
@@ -108,13 +114,34 @@ def test_get_backtest_stats_returns_stats_when_found():
         "error_lower_pct": -0.02,
         "error_upper_pct": 0.03,
         "volatility_p90": 0.015,
+        "regression_slope": 0.004,
+        "regression_intercept": -0.01,
     }
     args, kwargs = mock_get.call_args
     assert kwargs["params"] == {
-        "select": "error_lower_pct,error_upper_pct,volatility_p90",
+        "select": "error_lower_pct,error_upper_pct,volatility_p90,regression_slope,regression_intercept",
         "quote_code": "eq.EUR",
         "horizon_days": "eq.30",
     }
+
+
+def test_get_backtest_stats_returns_none_regression_fields_when_null():
+    mock_response = MagicMock()
+    mock_response.json.return_value = [
+        {
+            "error_lower_pct": -0.02,
+            "error_upper_pct": 0.03,
+            "volatility_p90": 0.015,
+            "regression_slope": None,
+            "regression_intercept": None,
+        }
+    ]
+    mock_response.raise_for_status.return_value = None
+    with patch("app.prediction.supabase_rest.httpx.get", return_value=mock_response):
+        result = get_backtest_stats("EUR", 30)
+
+    assert result["regression_slope"] is None
+    assert result["regression_intercept"] is None
 
 
 def test_get_backtest_stats_returns_none_when_not_found():
@@ -138,6 +165,8 @@ def test_upsert_backtest_stats_posts_with_merge_duplicates():
             "error_upper_pct": 0.03,
             "volatility_p90": 0.015,
             "sample_count": 240,
+            "regression_slope": 0.004,
+            "regression_intercept": -0.01,
         }
     ]
     with patch(
