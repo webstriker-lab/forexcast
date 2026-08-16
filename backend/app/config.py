@@ -10,6 +10,9 @@ class Settings(BaseSettings):
     supabase_service_key: str
     frontend_origin: str = "http://localhost:5173"
     fred_api_key: str = ""
+    llm_api_key: str = ""
+    llm_provider: str = ""
+    openrouter_api_key: str = ""
 
 
 @lru_cache
