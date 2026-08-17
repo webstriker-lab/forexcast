@@ -5,8 +5,8 @@ import httpx
 GDELT_BASE_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 ECON_THEMES = ["ECON_CURRENCY", "ECON_CENTRALBANK", "ECON_INTERESTRATES", "ECON_INFLATION"]
 MAX_RECORDS = 30
-MAX_RETRIES = 3
-RETRY_BACKOFF_SECONDS = 3
+MAX_RETRIES = 5
+RETRY_BACKOFF_SECONDS = 15
 
 
 def fetch_articles(country_query: str) -> list[dict]:
