@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import date
 
 from app.news.country_map import COUNTRY_NAMES
@@ -9,6 +10,13 @@ from app.news.supabase_rest import upsert_news_sentiment
 logger = logging.getLogger(__name__)
 
 MIN_ARTICLES = 3
+# A small proactive pause before each GDELT query. Live verification
+# showed GDELT's real-world throttling on a shared CI runner IP is
+# aggressive enough that firing 29 requests back-to-back reliably hits
+# it, even with per-request retry/backoff already in place -- spacing
+# requests out up front reduces how often that retry budget is needed
+# at all, rather than only reacting after the fact.
+GDELT_REQUEST_PAUSE_SECONDS = 3
 
 
 def run_news_sentiment() -> int:
@@ -33,6 +41,7 @@ def run_news_sentiment() -> int:
     if not COUNTRY_NAMES:
         logger.warning("run_news_sentiment has no mapped currencies to score")
     for currency_code, country_name in COUNTRY_NAMES.items():
+        time.sleep(GDELT_REQUEST_PAUSE_SECONDS)
         articles = fetch_articles(country_name)
         if len(articles) < MIN_ARTICLES:
             logger.info(

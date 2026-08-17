@@ -1,6 +1,17 @@
 from unittest.mock import patch
 
+import pytest
+
 from app.news.jobs import run_news_sentiment
+
+
+@pytest.fixture(autouse=True)
+def _no_real_sleep():
+    # Tests exercise the proactive inter-request pause's presence via
+    # mocking, not by actually waiting GDELT_REQUEST_PAUSE_SECONDS per
+    # currency -- this fixture applies to every test in this file.
+    with patch("app.news.jobs.time.sleep"):
+        yield
 
 
 def test_run_news_sentiment_scores_and_upserts_currencies_with_enough_coverage():
