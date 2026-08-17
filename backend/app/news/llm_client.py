@@ -1,9 +1,13 @@
 # backend/app/news/llm_client.py
 import json
+import time
 
 import httpx
 
 from app.config import get_settings
+
+MAX_RETRIES = 3
+RETRY_BACKOFF_SECONDS = 5
 
 PROVIDER_CONFIG = {
     "deepseek": {"base_url": "https://api.deepseek.com/v1", "model": "deepseek-chat"},
@@ -48,21 +52,31 @@ def _call_chat_completion(
     return, per this project's own live testing). A None here flows
     through score_sentiment exactly like a malformed response body --
     an expected per-currency content problem, not raised as an
-    exception. Real HTTP failures (auth, rate-limit, 5xx, timeout) still
-    propagate via raise_for_status().
+    exception. Real HTTP failures (auth, 5xx, timeout) still propagate
+    via raise_for_status().
+
+    A 429 (rate-limited) is retried up to MAX_RETRIES times with linear
+    backoff before propagating as a real failure -- confirmed live
+    during this feature's own verification that a free-tier OpenRouter
+    model rate-limits after only a couple of sequential calls, the same
+    class of issue app.news.gdelt_client's fetch_articles already
+    guards against for GDELT.
     """
-    response = httpx.post(
-        f"{base_url}/chat/completions",
-        headers={"Authorization": f"Bearer {api_key}"},
-        json={
-            "model": model,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": _build_prompt(articles, country_name)},
-            ],
-        },
-        timeout=60.0,
-    )
+    url = f"{base_url}/chat/completions"
+    headers = {"Authorization": f"Bearer {api_key}"}
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": _build_prompt(articles, country_name)},
+        ],
+    }
+    response = httpx.post(url, headers=headers, json=payload, timeout=60.0)
+    for attempt in range(MAX_RETRIES):
+        if response.status_code != 429:
+            break
+        time.sleep(RETRY_BACKOFF_SECONDS * (attempt + 1))
+        response = httpx.post(url, headers=headers, json=payload, timeout=60.0)
     response.raise_for_status()
     data = response.json()
     try:

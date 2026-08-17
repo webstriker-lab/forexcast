@@ -1,7 +1,7 @@
 import json
 from unittest.mock import MagicMock, patch
 
-from app.news.llm_client import score_sentiment
+from app.news.llm_client import MAX_RETRIES, score_sentiment
 
 
 def _mock_completion_response(content: str) -> MagicMock:
@@ -151,6 +151,48 @@ def test_score_sentiment_returns_none_for_null_content():
         result = score_sentiment([{"title": "Some headline"}], "Turkey")
 
     assert result is None
+
+
+def test_score_sentiment_retries_on_429_then_succeeds():
+    rate_limited = MagicMock()
+    rate_limited.status_code = 429
+    success = _mock_completion_response(
+        json.dumps({"score": 0.2, "summary": "Recovered after retry."})
+    )
+    success.status_code = 200
+    with patch("app.news.llm_client.get_settings") as mock_settings, patch(
+        "app.news.llm_client.httpx.post", side_effect=[rate_limited, success]
+    ) as mock_post, patch("app.news.llm_client.time.sleep"):
+        mock_settings.return_value.llm_api_key = ""
+        mock_settings.return_value.llm_provider = ""
+        mock_settings.return_value.openrouter_api_key = "fallback-key"
+        result = score_sentiment([{"title": "Some headline"}], "Turkey")
+
+    assert result == {"score": 0.2, "summary": "Recovered after retry."}
+    assert mock_post.call_count == 2
+
+
+def test_score_sentiment_propagates_after_exhausting_llm_retries():
+    import httpx
+
+    rate_limited = MagicMock()
+    rate_limited.status_code = 429
+    rate_limited.raise_for_status.side_effect = httpx.HTTPStatusError(
+        "rate limited", request=MagicMock(), response=rate_limited
+    )
+    with patch("app.news.llm_client.get_settings") as mock_settings, patch(
+        "app.news.llm_client.httpx.post", return_value=rate_limited
+    ) as mock_post, patch("app.news.llm_client.time.sleep"):
+        mock_settings.return_value.llm_api_key = ""
+        mock_settings.return_value.llm_provider = ""
+        mock_settings.return_value.openrouter_api_key = "fallback-key"
+        try:
+            score_sentiment([{"title": "Some headline"}], "Turkey")
+            assert False, "expected HTTPStatusError to propagate"
+        except httpx.HTTPStatusError:
+            pass
+
+    assert mock_post.call_count == 1 + MAX_RETRIES
 
 
 def test_score_sentiment_includes_country_name_and_skips_titleless_articles():
