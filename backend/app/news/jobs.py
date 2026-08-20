@@ -3,7 +3,7 @@ import time
 from datetime import date
 
 from app.news.country_map import COUNTRY_NAMES
-from app.news.gdelt_client import fetch_articles
+from app.news.gdelt_client import GDELTRateLimitedError, fetch_articles
 from app.news.llm_client import score_sentiment
 from app.news.supabase_rest import upsert_news_sentiment
 
@@ -35,6 +35,15 @@ def run_news_sentiment() -> int:
     failure partway through the run -- which still propagates and fails
     the job, per this app's fail-loud philosophy -- doesn't discard the
     currencies that already succeeded before it.
+
+    A currency whose GDELT query is still rate-limited after
+    gdelt_client's own retry budget is skipped (logged), not treated as
+    a fatal error -- live verification across several real runs showed
+    this happening to some currency almost every run on a shared CI
+    runner IP, making it an expected per-currency outcome rather than a
+    job-wide emergency. Any OTHER GDELT/LLM failure (a real 5xx,
+    network error, or auth failure) still propagates and fails the job,
+    per this app's usual fail-loud philosophy.
     """
     count = 0
     today = date.today().isoformat()
@@ -42,7 +51,14 @@ def run_news_sentiment() -> int:
         logger.warning("run_news_sentiment has no mapped currencies to score")
     for currency_code, country_name in COUNTRY_NAMES.items():
         time.sleep(GDELT_REQUEST_PAUSE_SECONDS)
-        articles = fetch_articles(country_name)
+        try:
+            articles = fetch_articles(country_name)
+        except GDELTRateLimitedError:
+            logger.warning(
+                "Skipping %s: GDELT still rate-limited after retries",
+                currency_code,
+            )
+            continue
         if len(articles) < MIN_ARTICLES:
             logger.info(
                 "Skipping %s: only %d articles found (need >= %d)",

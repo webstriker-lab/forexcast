@@ -2,6 +2,7 @@ from unittest.mock import patch
 
 import pytest
 
+from app.news.gdelt_client import GDELTRateLimitedError
 from app.news.jobs import run_news_sentiment
 
 
@@ -80,6 +81,31 @@ def test_run_news_sentiment_skips_currency_with_unparseable_llm_response_but_con
     assert count == 1  # TRY skipped (unparseable), EUR still written
     rows = mock_upsert.call_args[0][0]
     assert len(rows) == 1
+    assert rows[0]["currency_code"] == "EUR"
+
+
+def test_run_news_sentiment_skips_currency_rate_limited_by_gdelt_but_continues():
+    fake_countries = {"TRY": "Turkey", "EUR": "Eurozone"}
+    fake_articles = [{"title": f"h{i}"} for i in range(5)]
+
+    def fake_fetch(country_name):
+        if country_name == "Turkey":
+            raise GDELTRateLimitedError("still 429 after retries")
+        return fake_articles
+
+    with patch("app.news.jobs.COUNTRY_NAMES", fake_countries), patch(
+        "app.news.jobs.fetch_articles", side_effect=fake_fetch
+    ), patch(
+        "app.news.jobs.score_sentiment",
+        return_value={"score": 0.2, "summary": "Fine."},
+    ) as mock_score, patch(
+        "app.news.jobs.upsert_news_sentiment"
+    ) as mock_upsert:
+        count = run_news_sentiment()
+
+    assert count == 1  # TRY skipped (still rate-limited), EUR still written
+    mock_score.assert_called_once()  # never invoked for the rate-limited TRY
+    rows = mock_upsert.call_args[0][0]
     assert rows[0]["currency_code"] == "EUR"
 
 

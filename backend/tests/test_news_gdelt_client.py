@@ -1,6 +1,6 @@
 from unittest.mock import MagicMock, patch
 
-from app.news.gdelt_client import MAX_RETRIES, fetch_articles
+from app.news.gdelt_client import GDELTRateLimitedError, MAX_RETRIES, fetch_articles
 
 
 def test_fetch_articles_returns_article_list():
@@ -87,21 +87,22 @@ def test_fetch_articles_retries_on_429_then_succeeds():
     assert mock_get.call_count == 2
 
 
-def test_fetch_articles_propagates_after_exhausting_retries():
-    import httpx
-
+def test_fetch_articles_raises_gdelt_rate_limited_error_after_exhausting_retries():
+    # Deliberately does NOT raise via raise_for_status()/HTTPStatusError --
+    # a still-429 after exhausting MAX_RETRIES is its own distinct
+    # exception type (see GDELTRateLimitedError's docstring), so a
+    # caller can catch it specifically and skip that currency rather
+    # than treating it the same as a genuine infrastructure failure.
     rate_limited = MagicMock()
     rate_limited.status_code = 429
-    rate_limited.raise_for_status.side_effect = httpx.HTTPStatusError(
-        "rate limited", request=MagicMock(), response=rate_limited
-    )
     with patch(
         "app.news.gdelt_client.httpx.get", return_value=rate_limited
     ) as mock_get, patch("app.news.gdelt_client.time.sleep"):
         try:
             fetch_articles("Turkey")
-            assert False, "expected HTTPStatusError to propagate"
-        except httpx.HTTPStatusError:
+            assert False, "expected GDELTRateLimitedError to be raised"
+        except GDELTRateLimitedError:
             pass
 
     assert mock_get.call_count == 1 + MAX_RETRIES
+    rate_limited.raise_for_status.assert_not_called()
