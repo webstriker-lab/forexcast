@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     llm_provider: str = ""
     openrouter_api_key: str = ""
     llm_settings_private_key: str = ""
+    telegram_bot_token: str = ""
 
 
 @lru_cache
