@@ -158,6 +158,39 @@ def test_run_forecast_skips_adjustment_when_current_differential_unknown():
     assert rows[0]["predicted_rate"] == 0.91  # unadjusted -- no current differential
 
 
+def test_run_forecast_uses_naive_forecast_when_model_selected_is_naive():
+    with patch(
+        "app.prediction.jobs.get_active_currencies", return_value=["USD", "EUR"]
+    ), patch(
+        "app.prediction.jobs.get_rate_series",
+        return_value=(["2020-01-01"] * 100, [0.9] * 99 + [0.95]),
+    ), patch(
+        "app.prediction.jobs.forecast", return_value=0.5,  # must NOT be used
+    ), patch(
+        "app.prediction.jobs.realized_volatility", return_value=0.01
+    ), patch(
+        "app.prediction.jobs.get_backtest_stats",
+        return_value={
+            "model_selected": "naive",
+            "error_lower_pct": -0.02,
+            "error_upper_pct": 0.03,
+            "volatility_p90": 0.02,
+            "regression_slope": None,
+            "regression_intercept": None,
+        },
+    ), patch(
+        "app.prediction.jobs.get_latest_macro_rate", return_value=None
+    ), patch(
+        "app.prediction.jobs.get_latest_news_sentiment", return_value=None
+    ), patch("app.prediction.jobs.insert_predictions") as mock_insert:
+        run_forecast()
+
+    rows = mock_insert.call_args[0][0]
+    # naive_forecast(rates, steps) == rates[-1] == 0.95, not the mocked
+    # forecast() return value of 0.5.
+    assert all(r["predicted_rate"] == 0.95 for r in rows)
+
+
 def test_run_backtest_job_summarizes_and_upserts_per_currency_and_horizon():
     fake_results = {
         7: {"errors": [-0.01, 0.0, 0.01], "trailing_vols": [0.01, 0.02, 0.03]},
@@ -182,6 +215,33 @@ def test_run_backtest_job_summarizes_and_upserts_per_currency_and_horizon():
     assert rows[0]["sample_count"] == 3
     assert rows[0]["regression_slope"] is None
     assert rows[0]["regression_intercept"] is None
+    # No naive_errors provided in fake_results -> summarize() defaults to
+    # the historical model, and that default must be persisted, not dropped.
+    assert rows[0]["model_selected"] == "exponential_smoothing"
+
+
+def test_run_backtest_job_stores_naive_when_backtest_selects_it():
+    fake_results = {
+        7: {
+            "errors": [0.10, -0.10, 0.12],
+            "naive_errors": [0.01, -0.01, 0.02],
+            "trailing_vols": [0.01, 0.02, 0.03],
+        },
+    }
+    with patch(
+        "app.prediction.jobs.get_active_currencies", return_value=["USD", "EUR"]
+    ), patch(
+        "app.prediction.jobs.get_rate_series",
+        return_value=(["2020-01-01"] * 100, [0.9] * 100),
+    ), patch(
+        "app.prediction.jobs.get_macro_rate_series", return_value=[]
+    ), patch(
+        "app.prediction.jobs.run_backtest", return_value=fake_results
+    ), patch("app.prediction.jobs.upsert_backtest_stats") as mock_upsert:
+        run_backtest_job()
+
+    rows = mock_upsert.call_args[0][0]
+    assert rows[0]["model_selected"] == "naive"
 
 
 def test_run_backtest_job_aligns_and_passes_differentials():

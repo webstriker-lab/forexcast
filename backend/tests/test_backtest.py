@@ -1,6 +1,7 @@
 from unittest.mock import patch
 
 from app.prediction.backtest import fit_regression, run_backtest, summarize
+from app.prediction.horizons import trading_day_steps
 
 
 def test_run_backtest_produces_fewer_samples_for_longer_horizons():
@@ -127,6 +128,76 @@ def test_summarize_fits_and_applies_regression_to_bounds():
     raw_spread = max(errors) - min(errors)
     fitted_spread = result["error_upper_pct"] - result["error_lower_pct"]
     assert fitted_spread < raw_spread
+
+
+def test_run_backtest_collects_naive_errors_parallel_to_errors():
+    rates = [100.0 + i for i in range(150)]
+    results = run_backtest(rates, horizons=[7])
+    assert len(results[7]["naive_errors"]) == len(results[7]["errors"])
+    # naive_forecast just returns the last known rate -- verify directly
+    # against the origins the sibling no-look-ahead test established for
+    # this exact scenario: MIN_HISTORY=60, ORIGIN_SPACING=30 -> 60, 90, 120.
+    steps = trading_day_steps(7)
+    for origin, naive_error in zip([60, 90, 120], results[7]["naive_errors"]):
+        actual = rates[origin + steps]
+        last_known = rates[origin]
+        assert naive_error == (actual - last_known) / last_known
+
+
+def test_summarize_selects_naive_when_it_has_lower_error():
+    samples = {
+        "errors": [0.10, -0.10, 0.12, -0.12, 0.11],  # exponential smoothing: large errors
+        "naive_errors": [0.01, -0.01, 0.02, -0.02, 0.01],  # naive: much smaller
+        "trailing_vols": [0.01] * 5,
+    }
+    result = summarize(samples)
+    assert result["model_selected"] == "naive"
+    # bounds must reflect the tighter naive error spread, not the wider ES one
+    assert result["error_upper_pct"] < 0.10
+
+
+def test_summarize_selects_exponential_smoothing_when_it_has_lower_error():
+    samples = {
+        "errors": [0.01, -0.01, 0.02, -0.02, 0.01],
+        "naive_errors": [0.10, -0.10, 0.12, -0.12, 0.11],
+        "trailing_vols": [0.01] * 5,
+    }
+    result = summarize(samples)
+    assert result["model_selected"] == "exponential_smoothing"
+
+
+def test_summarize_defaults_to_exponential_smoothing_without_naive_errors():
+    # Backward compatibility: a caller that doesn't provide naive_errors
+    # (summarize() exercised in isolation, as every pre-existing test in
+    # this file does) gets the historical default, not an error.
+    samples = {
+        "errors": [-2.0, -1.0, 0.0, 1.0, 2.0],
+        "trailing_vols": [0.01, 0.02, 0.03, 0.04, 0.05],
+    }
+    result = summarize(samples)
+    assert result["model_selected"] == "exponential_smoothing"
+
+
+def test_summarize_skips_regression_when_naive_selected():
+    # The regression only ever adjusts exponential smoothing's residuals
+    # -- naive has no baseline drift for a differential to correct. Here
+    # errors/differentials would otherwise clearly clear fit_regression's
+    # gates, but naive_errors are tiny by comparison, so naive must win
+    # and the regression must NOT be fit.
+    import random
+    random.seed(7)
+    differentials = [i * 0.2 - 2.0 for i in range(30)]
+    errors = [0.004 * d - 0.01 + random.uniform(-0.001, 0.001) for d in differentials]
+    samples = {
+        "errors": errors,
+        "naive_errors": [0.0001] * 30,
+        "trailing_vols": [0.01] * 30,
+        "differentials": differentials,
+    }
+    result = summarize(samples)
+    assert result["model_selected"] == "naive"
+    assert result["regression_slope"] is None
+    assert result["regression_intercept"] is None
 
 
 def test_summarize_falls_back_to_raw_error_for_unpaired_origins():

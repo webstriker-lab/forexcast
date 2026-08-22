@@ -7,7 +7,7 @@ from app.macro.supabase_rest import get_latest_macro_rate, get_macro_rate_series
 from app.news.supabase_rest import get_latest_news_sentiment
 from app.prediction.backtest import run_backtest, summarize
 from app.prediction.horizons import trading_day_steps
-from app.prediction.model import forecast
+from app.prediction.model import forecast, naive_forecast
 from app.prediction.stats import realized_volatility
 from app.prediction.supabase_rest import (
     get_backtest_stats,
@@ -41,6 +41,13 @@ def run_forecast() -> int:
     confidence band is applied -- otherwise the baseline is used exactly
     as in 2a. Confidence is also flagged low when today's news sentiment
     for that currency is a shock (|score| >= 0.7), independent of volatility.
+
+    The baseline itself is whichever model backtest_stats.model_selected
+    says actually won the backtest for this (currency, horizon) --
+    exponential smoothing (forecast()) or naive persistence
+    (naive_forecast()); see app.prediction.backtest._select_model.
+    Missing the key (stats from before this field existed) defaults to
+    exponential smoothing, the prior behavior.
     """
     currencies = _predictable_currencies()
     usd_rate = get_latest_macro_rate(PIVOT)
@@ -78,7 +85,11 @@ def run_forecast() -> int:
                 )
                 continue
             steps = trading_day_steps(horizon_days)
-            predicted_rate = forecast(rates, steps)
+            predicted_rate = (
+                naive_forecast(rates, steps)
+                if stats.get("model_selected") == "naive"
+                else forecast(rates, steps)
+            )
             if stats["regression_slope"] is not None and current_differential is not None:
                 multiplier = 1 + (
                     stats["regression_slope"] * current_differential
@@ -159,6 +170,7 @@ def run_backtest_job() -> int:
                 {
                     "quote_code": quote_code,
                     "horizon_days": horizon_days,
+                    "model_selected": summary["model_selected"],
                     "error_lower_pct": summary["error_lower_pct"],
                     "error_upper_pct": summary["error_upper_pct"],
                     "volatility_p90": summary["volatility_p90"],

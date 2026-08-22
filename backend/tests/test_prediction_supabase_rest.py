@@ -97,6 +97,7 @@ def test_get_backtest_stats_returns_stats_when_found():
     mock_response = MagicMock()
     mock_response.json.return_value = [
         {
+            "model_selected": "naive",
             "error_lower_pct": -0.02,
             "error_upper_pct": 0.03,
             "volatility_p90": 0.015,
@@ -111,6 +112,7 @@ def test_get_backtest_stats_returns_stats_when_found():
         result = get_backtest_stats("EUR", 30)
 
     assert result == {
+        "model_selected": "naive",
         "error_lower_pct": -0.02,
         "error_upper_pct": 0.03,
         "volatility_p90": 0.015,
@@ -119,10 +121,31 @@ def test_get_backtest_stats_returns_stats_when_found():
     }
     args, kwargs = mock_get.call_args
     assert kwargs["params"] == {
-        "select": "error_lower_pct,error_upper_pct,volatility_p90,regression_slope,regression_intercept",
+        "select": "model_selected,error_lower_pct,error_upper_pct,volatility_p90,regression_slope,regression_intercept",
         "quote_code": "eq.EUR",
         "horizon_days": "eq.30",
     }
+
+
+def test_get_backtest_stats_defaults_model_selected_when_missing():
+    # The migration backfills existing rows to 'exponential_smoothing',
+    # but this defends the accessor itself against a row that somehow
+    # doesn't have the column selected/returned.
+    mock_response = MagicMock()
+    mock_response.json.return_value = [
+        {
+            "error_lower_pct": -0.02,
+            "error_upper_pct": 0.03,
+            "volatility_p90": 0.015,
+            "regression_slope": None,
+            "regression_intercept": None,
+        }
+    ]
+    mock_response.raise_for_status.return_value = None
+    with patch("app.prediction.supabase_rest.httpx.get", return_value=mock_response):
+        result = get_backtest_stats("EUR", 30)
+
+    assert result["model_selected"] == "exponential_smoothing"
 
 
 def test_get_backtest_stats_returns_none_regression_fields_when_null():
