@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import type { Debt } from '../hooks/useDebts'
 import { getDebtTimeline } from '../lib/apiClient'
+import { useDisplayCurrency } from '../hooks/useDisplayCurrency'
+import { convertUsdTo, fetchUsdConversionRates } from '../lib/currencyConversion'
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'JPY', 'AUD', 'CAD', 'CHF', 'CNY', 'SGD', 'NZD', 'AED']
 
@@ -32,6 +34,8 @@ export function DebtManager({ debts, onCreate, onUpdate, onDelete }: Props) {
   })
   const [summary, setSummary] = useState<DebtSummary | null>(null)
   const [summaryError, setSummaryError] = useState<string | null>(null)
+  const { currency: displayCurrency } = useDisplayCurrency()
+  const [displayTotals, setDisplayTotals] = useState<{ balance: number; payment: number } | null>(null)
 
   useEffect(() => {
     getDebtTimeline()
@@ -41,6 +45,20 @@ export function DebtManager({ debts, onCreate, onUpdate, onDelete }: Props) {
       })
       .catch((err: Error) => setSummaryError(err.message))
   }, [debts])
+
+  useEffect(() => {
+    if (!summary) return
+    let cancelled = false
+    fetchUsdConversionRates([displayCurrency]).then(rates => {
+      if (cancelled) return
+      const balance = convertUsdTo(summary.total_balance, displayCurrency, rates)
+      const payment = convertUsdTo(summary.total_minimum_payment, displayCurrency, rates)
+      setDisplayTotals(balance !== null && payment !== null ? { balance, payment } : null)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [summary, displayCurrency])
 
   const resetForm = () => {
     setForm({
@@ -103,9 +121,9 @@ export function DebtManager({ debts, onCreate, onUpdate, onDelete }: Props) {
       {/* Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-sm text-gray-500">Total Debt (USD)</p>
+          <p className="text-sm text-gray-500">Total Debt ({displayCurrency})</p>
           <p className="text-2xl font-bold text-red-600">
-            {summary ? `$${summary.total_balance.toLocaleString()}` : '—'}
+            {displayTotals ? displayTotals.balance.toLocaleString(undefined, { style: 'currency', currency: displayCurrency }) : '—'}
           </p>
           {summary && summary.currencies_missing_rate.length > 0 && (
             <p className="text-xs text-gray-400 mt-1">
@@ -114,9 +132,9 @@ export function DebtManager({ debts, onCreate, onUpdate, onDelete }: Props) {
           )}
         </div>
         <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-sm text-gray-500">Monthly Payments (USD)</p>
+          <p className="text-sm text-gray-500">Monthly Payments ({displayCurrency})</p>
           <p className="text-2xl font-bold">
-            {summary ? `$${summary.total_minimum_payment.toLocaleString()}` : '—'}
+            {displayTotals ? displayTotals.payment.toLocaleString(undefined, { style: 'currency', currency: displayCurrency }) : '—'}
           </p>
         </div>
         <div className="bg-white rounded-lg shadow p-4">

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { sealBox } from '../lib/encryption'
 import { useAuth } from '../contexts/AuthContext'
+import { useDisplayCurrency } from '../hooks/useDisplayCurrency'
 
 const LLM_SETTINGS_PUBLIC_KEY = import.meta.env.VITE_LLM_SETTINGS_PUBLIC_KEY as string | undefined
 
@@ -13,8 +14,12 @@ const PROVIDERS = [
   { value: 'gemini', label: 'Google Gemini' },
 ]
 
+const CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'JPY', 'AUD', 'CAD', 'CHF', 'CNY', 'SGD', 'NZD', 'AED']
+
 export function SettingsPage() {
   const { session } = useAuth()
+  const { currency: displayCurrency, setCurrency: setDisplayCurrency, loading: currencyLoading } = useDisplayCurrency()
+  const [currencyMessage, setCurrencyMessage] = useState('')
   const [provider, setProvider] = useState('openrouter')
   const [apiKey, setApiKey] = useState('')
   const [model, setModel] = useState('')
@@ -89,8 +94,35 @@ export function SettingsPage() {
     setSaving(false)
   }
 
+  const handleDisplayCurrencyChange = async (newCurrency: string) => {
+    setCurrencyMessage('')
+    const ok = await setDisplayCurrency(newCurrency)
+    setCurrencyMessage(ok ? 'Display currency saved!' : 'Error saving display currency')
+  }
+
   return (
     <div className="max-w-lg space-y-6">
+      {/* Display Currency */}
+      <div className="bg-white rounded-lg shadow p-6 space-y-4">
+        <h3 className="text-lg font-semibold">Display Currency</h3>
+        <p className="text-sm text-gray-500">
+          Used for totals in the Planner (debts and savings goals can each be in a different currency).
+        </p>
+        <select
+          value={displayCurrency}
+          disabled={currencyLoading}
+          onChange={e => handleDisplayCurrencyChange(e.target.value)}
+          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+        >
+          {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        {currencyMessage && (
+          <p className={`text-sm ${currencyMessage.startsWith('Error') ? 'text-red-600' : 'text-green-600'}`}>
+            {currencyMessage}
+          </p>
+        )}
+      </div>
+
       {/* LLM Settings */}
       <div className="bg-white rounded-lg shadow p-6 space-y-4">
         <h3 className="text-lg font-semibold">LLM Configuration</h3>
