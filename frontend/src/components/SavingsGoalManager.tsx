@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { SavingsGoal } from '../hooks/useSavingsGoals'
+import { getGoalsTimeline, type GoalTimelineEntry } from '../lib/apiClient'
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'JPY', 'AUD', 'CAD', 'CHF', 'CNY', 'SGD', 'NZD', 'AED']
 
@@ -20,6 +21,18 @@ export function SavingsGoalManager({ goals, onCreate, onUpdate, onDelete }: Prop
     target_date: '',
     monthly_contribution: '',
   })
+
+  const [timelines, setTimelines] = useState<Record<string, GoalTimelineEntry>>({})
+  const [timelineError, setTimelineError] = useState<string | null>(null)
+
+  useEffect(() => {
+    getGoalsTimeline()
+      .then(res => {
+        setTimelines(res.goals)
+        setTimelineError(null)
+      })
+      .catch((err: Error) => setTimelineError(err.message))
+  }, [goals])
 
   const resetForm = () => {
     setForm({
@@ -135,10 +148,17 @@ export function SavingsGoalManager({ goals, onCreate, onUpdate, onDelete }: Prop
         </form>
       )}
 
+      {timelineError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+          {timelineError}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {activeGoals.map(goal => {
           const progress = goal.current_saved / goal.target_amount
           const isComplete = progress >= 1
+          const timeline = timelines[goal.id]
 
           return (
             <div key={goal.id} className={`bg-white rounded-lg shadow p-6 ${isComplete ? 'ring-2 ring-green-500' : ''}`}>
@@ -170,6 +190,18 @@ export function SavingsGoalManager({ goals, onCreate, onUpdate, onDelete }: Prop
                     <span className="text-gray-500">Target Date</span>
                     <span className="font-medium">{new Date(goal.target_date).toLocaleDateString()}</span>
                   </div>
+                )}
+                {!isComplete && timeline?.monthly_contribution != null && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Monthly needed</span>
+                    <span className="font-medium">
+                      {goal.target_currency} {timeline.monthly_contribution.toLocaleString()}
+                      {timeline.months_to_goal != null && ` (~${timeline.months_to_goal} mo)`}
+                    </span>
+                  </div>
+                )}
+                {!isComplete && timeline?.error && (
+                  <p className="text-xs text-gray-400">{timeline.error}</p>
                 )}
               </div>
               <div className="mt-4 flex gap-2">

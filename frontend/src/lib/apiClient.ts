@@ -58,6 +58,29 @@ export async function getDebtTimeline(): Promise<{
   return res.json()
 }
 
+export interface GoalTimelineEntry {
+  goal: Record<string, unknown>
+  status?: 'completed'
+  months_to_goal?: number
+  monthly_contribution?: number
+  timeline?: { month: number; date: string; balance: number; progress: number }[]
+  error?: string
+}
+
+export async function getGoalsTimeline(): Promise<{ goals: Record<string, GoalTimelineEntry> }> {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Not authenticated')
+
+  const res = await fetch(`${API_BASE_URL}/planner/timeline/goals`, {
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
+
 export async function getBadges(): Promise<Record<string, { name: string; emoji: string; description: string }>> {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session) throw new Error('Not authenticated')
