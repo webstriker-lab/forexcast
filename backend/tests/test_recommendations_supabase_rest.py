@@ -6,6 +6,7 @@ from app.recommendations.supabase_rest import (
     get_current_rate,
     get_directed_rate,
     get_latest_predictions,
+    get_latest_recommendation,
     get_latest_two_recommendations,
     insert_recommendations,
     record_alert_event,
@@ -248,3 +249,43 @@ def test_deactivate_alert_patches_is_active_false():
     assert args[0] == "https://example.supabase.co/rest/v1/alerts"
     assert kwargs["params"] == {"id": "eq.alert-1"}
     assert kwargs["json"] == {"is_active": False}
+
+
+def test_get_latest_recommendation_returns_the_newest_row():
+    response = MagicMock()
+    response.json.return_value = [
+        {
+            "recommendation": "act_now",
+            "current_rate": 90.5,
+            "expected_rate": 92.0,
+            "lower_bound": 89.0,
+            "upper_bound": 95.0,
+            "reference_horizon_days": 30,
+            "generated_at": "2026-08-22T10:00:00+00:00",
+        }
+    ]
+    response.raise_for_status.return_value = None
+
+    with patch(
+        "app.recommendations.supabase_rest.httpx.get", return_value=response
+    ) as mock_get:
+        result = get_latest_recommendation("INR")
+
+    assert result["recommendation"] == "act_now"
+    assert result["current_rate"] == 90.5
+    kwargs = mock_get.call_args.kwargs
+    assert kwargs["params"]["quote_code"] == "eq.INR"
+    assert kwargs["params"]["base_code"] == "eq.USD"
+    assert kwargs["params"]["order"] == "generated_at.desc"
+    assert kwargs["params"]["limit"] == 1
+
+
+def test_get_latest_recommendation_returns_none_when_no_rows_exist():
+    response = MagicMock()
+    response.json.return_value = []
+    response.raise_for_status.return_value = None
+
+    with patch("app.recommendations.supabase_rest.httpx.get", return_value=response):
+        result = get_latest_recommendation("INR")
+
+    assert result is None

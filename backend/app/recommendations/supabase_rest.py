@@ -185,3 +185,37 @@ def deactivate_alert(alert_id: str) -> None:
         timeout=30.0,
     )
     response.raise_for_status()
+
+
+def get_latest_recommendation(quote_code: str) -> dict | None:
+    """Returns the most recent recommendation row for (base_code='USD',
+    quote_code=<quote_code>), or None if none exists yet. Used by the
+    LLM agent's get_recommendation tool.
+    """
+    settings = get_settings()
+    response = httpx.get(
+        f"{settings.supabase_url}/rest/v1/recommendations",
+        params={
+            "select": "recommendation,current_rate,expected_rate,lower_bound,upper_bound,reference_horizon_days,generated_at",
+            "base_code": "eq.USD",
+            "quote_code": f"eq.{quote_code}",
+            "order": "generated_at.desc",
+            "limit": 1,
+        },
+        headers=_headers(),
+        timeout=30.0,
+    )
+    response.raise_for_status()
+    rows = response.json()
+    if not rows:
+        return None
+    row = rows[0]
+    return {
+        "recommendation": row["recommendation"],
+        "current_rate": float(row["current_rate"]),
+        "expected_rate": float(row["expected_rate"]),
+        "lower_bound": float(row["lower_bound"]),
+        "upper_bound": float(row["upper_bound"]),
+        "reference_horizon_days": row["reference_horizon_days"],
+        "generated_at": row["generated_at"],
+    }
