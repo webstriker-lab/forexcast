@@ -18,6 +18,7 @@ export function SavingsGoalManager({ goals, onCreate, onUpdate, onDelete }: Prop
     target_amount: '',
     current_saved: '',
     target_date: '',
+    monthly_contribution: '',
   })
 
   const resetForm = () => {
@@ -27,6 +28,7 @@ export function SavingsGoalManager({ goals, onCreate, onUpdate, onDelete }: Prop
       target_amount: '',
       current_saved: '',
       target_date: '',
+      monthly_contribution: '',
     })
     setShowForm(false)
   }
@@ -39,6 +41,7 @@ export function SavingsGoalManager({ goals, onCreate, onUpdate, onDelete }: Prop
       target_amount: parseFloat(form.target_amount),
       current_saved: parseFloat(form.current_saved) || 0,
       target_date: form.target_date || null,
+      monthly_contribution: form.monthly_contribution ? parseFloat(form.monthly_contribution) : null,
     })
     resetForm()
   }
@@ -106,6 +109,17 @@ export function SavingsGoalManager({ goals, onCreate, onUpdate, onDelete }: Prop
                 type="date"
                 value={form.target_date}
                 onChange={e => setForm({ ...form, target_date: e.target.value })}
+                className="w-full px-3 py-2 border rounded-md"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Contribution (optional)</label>
+              <input
+                type="number"
+                step="any"
+                value={form.monthly_contribution}
+                onChange={e => setForm({ ...form, monthly_contribution: e.target.value })}
+                placeholder="Leave blank to derive from target date"
                 className="w-full px-3 py-2 border rounded-md"
               />
             </div>
