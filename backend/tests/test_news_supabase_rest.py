@@ -33,14 +33,14 @@ def test_get_latest_news_sentiment_returns_todays_row():
     mock_response = MagicMock()
     mock_response.raise_for_status.return_value = None
     mock_response.json.return_value = [
-        {"score": -0.6, "summary": "Rate hike expected.", "as_of": today}
+        {"score": -0.6, "summary": "Rate hike expected.", "article_count": 12, "as_of": today}
     ]
     with patch(
         "app.news.supabase_rest.httpx.get", return_value=mock_response
     ) as mock_get:
         result = get_latest_news_sentiment("TRY")
 
-    assert result == {"score": -0.6, "summary": "Rate hike expected."}
+    assert result == {"score": -0.6, "summary": "Rate hike expected.", "article_count": 12}
     args, kwargs = mock_get.call_args
     assert kwargs["params"]["order"] == "as_of.desc"
     assert kwargs["params"]["limit"] == 1

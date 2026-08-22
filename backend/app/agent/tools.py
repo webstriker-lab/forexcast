@@ -1,3 +1,5 @@
+import httpx
+
 from app.news.supabase_rest import get_latest_news_sentiment
 from app.recommendations.supabase_rest import (
     create_alert_for_user,
@@ -120,9 +122,27 @@ class ToolArgumentError(Exception):
 
 
 def _require(arguments: dict, *keys: str) -> None:
-    missing = [k for k in keys if k not in arguments]
+    missing = [k for k in keys if k not in arguments or arguments[k] is None]
     if missing:
         raise ToolArgumentError(f"missing required argument(s): {', '.join(missing)}")
+
+
+def _run_write(fn, *args, **kwargs):
+    """Runs a Supabase-writing tool implementation, converting a 4xx
+    HTTPStatusError (bad model-supplied data -- invalid currency code,
+    invalid enum value, malformed uuid, etc.) into a clean tool-error
+    dict instead of letting it crash the request. A 5xx (or any other
+    HTTPStatusError shape) is a genuine infrastructure failure and
+    re-raises.
+    """
+    try:
+        return fn(*args, **kwargs)
+    except httpx.HTTPStatusError as exc:
+        response = getattr(exc, "response", None)
+        status_code = getattr(response, "status_code", None)
+        if status_code is not None and 400 <= status_code < 500:
+            return {"error": f"invalid alert data: {exc}"}
+        raise
 
 
 def call_tool(name: str, arguments: dict, user_id: str) -> dict:
@@ -135,14 +155,20 @@ def call_tool(name: str, arguments: dict, user_id: str) -> dict:
     """
     if name == "get_forecast":
         _require(arguments, "quote_code", "horizon_days")
+        try:
+            horizon_days = int(arguments["horizon_days"])
+        except (ValueError, TypeError):
+            raise ToolArgumentError(
+                f"horizon_days must be an integer, got {arguments['horizon_days']!r}"
+            )
         predictions = get_latest_predictions(arguments["quote_code"])
         match = next(
-            (p for p in predictions if p["horizon_days"] == arguments["horizon_days"]), None
+            (p for p in predictions if p["horizon_days"] == horizon_days), None
         )
         if match is None:
             return {
                 "error": f"no forecast available for {arguments['quote_code']} "
-                f"at horizon {arguments['horizon_days']}"
+                f"at horizon {horizon_days}"
             }
         return match
 
@@ -162,7 +188,8 @@ def call_tool(name: str, arguments: dict, user_id: str) -> dict:
 
     if name == "create_alert":
         _require(arguments, "quote_code", "alert_type")
-        return create_alert_for_user(
+        return _run_write(
+            create_alert_for_user,
             user_id,
             arguments["quote_code"],
             arguments["alert_type"],
@@ -178,14 +205,23 @@ def call_tool(name: str, arguments: dict, user_id: str) -> dict:
         fields = {
             k: v for k, v in arguments.items() if k in ("threshold_rate", "direction", "is_active")
         }
-        updated = update_alert_for_user(user_id, arguments["alert_id"], fields)
+        if not fields:
+            return {
+                "error": "no fields to update -- provide at least one of "
+                "threshold_rate, direction, is_active"
+            }
+        updated = _run_write(update_alert_for_user, user_id, arguments["alert_id"], fields)
+        if isinstance(updated, dict) and "error" in updated:
+            return updated
         if updated is None:
             return {"error": "no alert with that id belongs to you"}
         return updated
 
     if name == "delete_alert":
         _require(arguments, "alert_id")
-        deleted = delete_alert_for_user(user_id, arguments["alert_id"])
+        deleted = _run_write(delete_alert_for_user, user_id, arguments["alert_id"])
+        if isinstance(deleted, dict) and "error" in deleted:
+            return deleted
         if not deleted:
             return {"error": "no alert with that id belongs to you"}
         return {"deleted": True}

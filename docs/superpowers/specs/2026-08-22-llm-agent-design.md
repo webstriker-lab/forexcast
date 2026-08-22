@@ -203,7 +203,8 @@ POST /chat
 Authorization: Bearer <supabase JWT>   (via existing get_current_user)
 Body:  {"messages": [{"role": "user"|"assistant", "content": str}, ...]}
 200:   {"message": {"role": "assistant", "content": str}, "tool_calls": [{"tool": str, "arguments": dict, "result": ...}]}
-400:   LLMNotConfiguredError (no llm_settings row) or FastAPI's own request-validation error on a malformed body
+400:   LLMNotConfiguredError (no llm_settings row)
+422:   FastAPI's own request-validation error on a malformed body (e.g. an invalid `role` value, now constrained to "user"/"assistant" per Fix 6 above)
 502:   ToolLoopExceededError (MAX_TOOL_ITERATIONS exhausted)
 ```
 

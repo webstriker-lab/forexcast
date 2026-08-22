@@ -112,6 +112,35 @@ def test_run_chat_feeds_back_a_tool_error_from_tool_argument_error():
     assert "missing required argument" in result["tool_calls"][0]["result"]["error"]
 
 
+def test_run_chat_feeds_back_a_tool_error_from_unknown_tool_value_error():
+    responses = [
+        _tool_call_response("get_forecast_v2", "{}"),
+        _final_answer_response("Let me try again"),
+    ]
+    with patch("app.agent.orchestrator.get_llm_settings", return_value=_settings_row()), patch(
+        "app.agent.orchestrator.decrypt_api_key", return_value="plain-key"
+    ), patch(
+        "app.agent.orchestrator.call_chat_completion", side_effect=responses
+    ), patch(
+        "app.agent.orchestrator.call_tool",
+        side_effect=ValueError("unknown tool: get_forecast_v2"),
+    ):
+        result = run_chat("u1", [{"role": "user", "content": "hi"}])
+
+    assert result["tool_calls"][0]["result"] == {"error": "unknown tool: get_forecast_v2"}
+
+
+def test_run_chat_raises_a_clear_error_on_malformed_provider_response_envelope():
+    with patch("app.agent.orchestrator.get_llm_settings", return_value=_settings_row()), patch(
+        "app.agent.orchestrator.decrypt_api_key", return_value="plain-key"
+    ), patch(
+        "app.agent.orchestrator.call_chat_completion",
+        return_value={"error": {"message": "upstream unavailable"}},
+    ):
+        with pytest.raises(ValueError):
+            run_chat("u1", [{"role": "user", "content": "hi"}])
+
+
 def test_run_chat_raises_after_exceeding_max_tool_iterations():
     responses = [
         _tool_call_response("get_forecast", '{"quote_code": "EUR", "horizon_days": 30}')

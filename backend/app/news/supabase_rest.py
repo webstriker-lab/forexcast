@@ -37,7 +37,7 @@ def get_latest_news_sentiment(currency_code: str) -> dict | None:
     response = httpx.get(
         f"{settings.supabase_url}/rest/v1/news_sentiment",
         params={
-            "select": "score,summary,as_of",
+            "select": "score,summary,article_count,as_of",
             "currency_code": f"eq.{currency_code}",
             "order": "as_of.desc",
             "limit": 1,
@@ -56,4 +56,8 @@ def get_latest_news_sentiment(currency_code: str) -> dict | None:
     # today is meaningless as "today's shock," not just stale.
     if row["as_of"] != date.today().isoformat():
         return None
-    return {"score": float(row["score"]), "summary": row["summary"]}
+    return {
+        "score": float(row["score"]),
+        "summary": row["summary"],
+        "article_count": row["article_count"],
+    }

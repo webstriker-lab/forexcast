@@ -52,7 +52,12 @@ def run_chat(user_id: str, messages: list[dict]) -> dict:
 
     for _ in range(MAX_TOOL_ITERATIONS):
         response = call_chat_completion(provider, api_key, model, conversation, TOOL_SCHEMAS)
-        choice = response["choices"][0]["message"]
+        try:
+            choice = response["choices"][0]["message"]
+        except (KeyError, IndexError, TypeError) as exc:
+            raise ValueError(
+                f"provider returned an unexpected response shape: {response}"
+            ) from exc
         tool_calls = choice.get("tool_calls")
         if not tool_calls:
             return {
@@ -72,7 +77,7 @@ def run_chat(user_id: str, messages: list[dict]) -> dict:
             else:
                 try:
                     result = call_tool(fn["name"], arguments, user_id)
-                except ToolArgumentError as exc:
+                except (ToolArgumentError, ValueError) as exc:
                     result = {"error": str(exc)}
             tool_call_log.append({"tool": fn["name"], "arguments": arguments, "result": result})
             conversation.append(
