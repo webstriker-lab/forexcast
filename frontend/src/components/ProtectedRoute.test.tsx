@@ -33,6 +33,7 @@ describe('ProtectedRoute', () => {
       loading: false,
       signInWithPassword: vi.fn(),
       signUp: vi.fn(),
+      resetPassword: vi.fn(),
       signInWithGoogle: vi.fn(),
       signOut: vi.fn(),
     })
@@ -47,6 +48,7 @@ describe('ProtectedRoute', () => {
       loading: false,
       signInWithPassword: vi.fn(),
       signUp: vi.fn(),
+      resetPassword: vi.fn(),
       signInWithGoogle: vi.fn(),
       signOut: vi.fn(),
     })

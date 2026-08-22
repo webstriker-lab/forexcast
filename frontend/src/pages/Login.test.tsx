@@ -15,6 +15,7 @@ describe('Login', () => {
       loading: false,
       signInWithPassword: vi.fn().mockResolvedValue({ error: 'Invalid credentials' }),
       signUp: vi.fn(),
+      resetPassword: vi.fn(),
       signInWithGoogle: vi.fn(),
       signOut: vi.fn(),
     })
@@ -41,6 +42,7 @@ describe('Login', () => {
       loading: false,
       signInWithPassword: vi.fn(),
       signUp,
+      resetPassword: vi.fn(),
       signInWithGoogle: vi.fn(),
       signOut: vi.fn(),
     })
@@ -51,7 +53,7 @@ describe('Login', () => {
       </MemoryRouter>,
     )
 
-    fireEvent.click(screen.getByText("Don't have an account? Sign up"))
+    fireEvent.click(screen.getByRole('button', { name: 'Sign up' }))
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@b.com' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secretpw' } })
     fireEvent.click(screen.getByRole('button', { name: 'Sign up' }))
@@ -71,6 +73,7 @@ describe('Login', () => {
       loading: false,
       signInWithPassword: vi.fn(),
       signUp,
+      resetPassword: vi.fn(),
       signInWithGoogle: vi.fn(),
       signOut: vi.fn(),
     })
@@ -81,7 +84,7 @@ describe('Login', () => {
       </MemoryRouter>,
     )
 
-    fireEvent.click(screen.getByText("Don't have an account? Sign up"))
+    fireEvent.click(screen.getByRole('button', { name: 'Sign up' }))
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'a@b.com' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'secretpw' } })
     fireEvent.click(screen.getByRole('button', { name: 'Sign up' }))
