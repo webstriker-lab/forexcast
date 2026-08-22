@@ -20,9 +20,11 @@ def test_run_daily_fetches_and_upserts_latest_rates():
         [
             {"base_code": "USD", "quote_code": "EUR", "rate": 0.867, "as_of": "2026-08-13"},
             {"base_code": "USD", "quote_code": "INR", "rate": 95.44, "as_of": "2026-08-13"},
+            {"base_code": "EUR", "quote_code": "INR", "rate": 110.080738, "as_of": "2026-08-13"},
+            {"base_code": "INR", "quote_code": "EUR", "rate": 0.009084, "as_of": "2026-08-13"},
         ]
     )
-    assert count == 2
+    assert count == 4
 
 
 def test_run_daily_excludes_usd_from_requested_symbols():
@@ -53,14 +55,26 @@ def test_run_backfill_flattens_range_response_into_rows():
 
     mock_fetch.assert_called_once_with("USD", ["EUR", "INR"], "2020-01-01", "2020-01-02")
     upserted_rows = mock_upsert.call_args[0][0]
-    assert len(upserted_rows) == 4
+    assert len(upserted_rows) == 8
     assert {
         "base_code": "USD",
         "quote_code": "EUR",
         "rate": 0.9,
         "as_of": "2020-01-01",
     } in upserted_rows
-    assert count == 4
+    assert {
+        "base_code": "EUR",
+        "quote_code": "INR",
+        "rate": 78.888889,
+        "as_of": "2020-01-01",
+    } in upserted_rows
+    assert {
+        "base_code": "INR",
+        "quote_code": "EUR",
+        "rate": 0.012676,
+        "as_of": "2020-01-01",
+    } in upserted_rows
+    assert count == 8
 
 
 def test_run_backfill_defaults_start_date_to_1999():
@@ -135,10 +149,12 @@ def test_run_daily_integration_across_module_boundaries():
     ) as mock_post:
         count = run_daily()
 
-    assert count == 2
+    assert count == 4
     args, kwargs = mock_post.call_args
     assert args[0] == "https://example.supabase.co/rest/v1/rates_cache"
     assert kwargs["json"] == [
         {"base_code": "USD", "quote_code": "EUR", "rate": 0.867, "as_of": "2026-08-13"},
         {"base_code": "USD", "quote_code": "INR", "rate": 95.44, "as_of": "2026-08-13"},
+        {"base_code": "EUR", "quote_code": "INR", "rate": 110.080738, "as_of": "2026-08-13"},
+        {"base_code": "INR", "quote_code": "EUR", "rate": 0.009084, "as_of": "2026-08-13"},
     ]
