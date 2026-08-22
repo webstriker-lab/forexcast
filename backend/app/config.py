@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_provider: str = ""
     openrouter_api_key: str = ""
+    llm_settings_private_key: str = ""
 
 
 @lru_cache
