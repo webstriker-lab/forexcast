@@ -177,7 +177,10 @@ def test_update_streak_new_best():
 
 
 def test_check_streak_achievements_30_days():
-    """Test 30-day streak achievement."""
+    """Test 30-day streak achievement. Only badge_id and metadata are
+    returned -- display fields (name/emoji/description) come from the
+    BADGES catalog by badge_id, not duplicated onto the achievement row.
+    """
     streak_data = {
         "daily_checkin_current": 30,
         "daily_checkin_best": 30,
@@ -188,7 +191,9 @@ def test_check_streak_achievements_30_days():
     
     assert len(new) == 1
     assert new[0]["badge_id"] == "streak_30_days"
-    assert new[0]["emoji"] == "🦊"
+    assert new[0]["metadata"] == {"streak_days": 30}
+    assert "emoji" not in new[0]
+    assert "name" not in new[0]
 
 
 def test_check_streak_achievements_not_yet():
