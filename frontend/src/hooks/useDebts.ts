@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { useAuth } from '../contexts/AuthContext'
 
 export interface Debt {
   id: string
@@ -15,37 +16,68 @@ export interface Debt {
 }
 
 export function useDebts() {
+  const { session } = useAuth()
   const [debts, setDebts] = useState<Debt[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const fetchDebts = useCallback(async () => {
-    const { data } = await supabase
+    const { data, error: fetchError } = await supabase
       .from('debts')
       .select('*')
       .order('created_at', { ascending: false })
-    setDebts(data ?? [])
+    if (fetchError) {
+      setError(fetchError.message)
+    } else {
+      setError(null)
+      setDebts(data ?? [])
+    }
     setLoading(false)
   }, [])
 
   useEffect(() => { fetchDebts() }, [fetchDebts])
 
   const createDebt = async (debt: Omit<Debt, 'id' | 'is_active' | 'created_at'>) => {
-    const { error } = await supabase.from('debts').insert(debt)
-    if (!error) await fetchDebts()
-    return !error
+    if (!session) {
+      setError('Not signed in')
+      return false
+    }
+    const { error: insertError } = await supabase
+      .from('debts')
+      .insert({ ...debt, user_id: session.user.id })
+    if (insertError) {
+      setError(insertError.message)
+      return false
+    }
+    setError(null)
+    await fetchDebts()
+    return true
   }
 
   const updateDebt = async (id: string, data: Partial<Debt>) => {
-    const { error } = await supabase.from('debts').update(data).eq('id', id)
-    if (!error) await fetchDebts()
-    return !error
+    const { error: updateError } = await supabase.from('debts').update(data).eq('id', id)
+    if (updateError) {
+      setError(updateError.message)
+      return false
+    }
+    setError(null)
+    await fetchDebts()
+    return true
   }
 
   const deleteDebt = async (id: string) => {
-    const { error } = await supabase.from('debts').update({ is_active: false }).eq('id', id)
-    if (!error) await fetchDebts()
-    return !error
+    const { error: deleteError } = await supabase
+      .from('debts')
+      .update({ is_active: false })
+      .eq('id', id)
+    if (deleteError) {
+      setError(deleteError.message)
+      return false
+    }
+    setError(null)
+    await fetchDebts()
+    return true
   }
 
-  return { debts, loading, createDebt, updateDebt, deleteDebt }
+  return { debts, loading, error, createDebt, updateDebt, deleteDebt }
 }
