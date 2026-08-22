@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type { Debt } from '../hooks/useDebts'
+import { getDebtTimeline } from '../lib/apiClient'
 
 const CURRENCIES = ['USD', 'EUR', 'GBP', 'INR', 'JPY', 'AUD', 'CAD', 'CHF', 'CNY', 'SGD', 'NZD', 'AED']
 
@@ -8,6 +9,13 @@ interface Props {
   onCreate: (debt: Omit<Debt, 'id' | 'is_active' | 'created_at'>) => Promise<boolean>
   onUpdate: (id: string, data: Partial<Debt>) => Promise<boolean>
   onDelete: (id: string) => Promise<boolean>
+}
+
+interface DebtSummary {
+  total_balance: number
+  total_minimum_payment: number
+  debt_count: number
+  currencies_missing_rate: string[]
 }
 
 export function DebtManager({ debts, onCreate, onUpdate, onDelete }: Props) {
@@ -22,6 +30,17 @@ export function DebtManager({ debts, onCreate, onUpdate, onDelete }: Props) {
     minimum_payment: '',
     due_day: '',
   })
+  const [summary, setSummary] = useState<DebtSummary | null>(null)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
+
+  useEffect(() => {
+    getDebtTimeline()
+      .then(res => {
+        setSummary(res.summary as DebtSummary)
+        setSummaryError(null)
+      })
+      .catch((err: Error) => setSummaryError(err.message))
+  }, [debts])
 
   const resetForm = () => {
     setForm({
@@ -72,20 +91,33 @@ export function DebtManager({ debts, onCreate, onUpdate, onDelete }: Props) {
   }
 
   const activeDebts = debts.filter(d => d.is_active)
-  const totalBalance = activeDebts.reduce((sum, d) => sum + d.current_balance, 0)
-  const totalPayment = activeDebts.reduce((sum, d) => sum + d.minimum_payment, 0)
 
   return (
     <div className="space-y-6">
+      {summaryError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+          {summaryError}
+        </div>
+      )}
+
       {/* Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-sm text-gray-500">Total Debt</p>
-          <p className="text-2xl font-bold text-red-600">${totalBalance.toLocaleString()}</p>
+          <p className="text-sm text-gray-500">Total Debt (USD)</p>
+          <p className="text-2xl font-bold text-red-600">
+            {summary ? `$${summary.total_balance.toLocaleString()}` : '—'}
+          </p>
+          {summary && summary.currencies_missing_rate.length > 0 && (
+            <p className="text-xs text-gray-400 mt-1">
+              Excludes debts in {summary.currencies_missing_rate.join(', ')} (no rate yet)
+            </p>
+          )}
         </div>
         <div className="bg-white rounded-lg shadow p-4">
-          <p className="text-sm text-gray-500">Monthly Payments</p>
-          <p className="text-2xl font-bold">${totalPayment.toLocaleString()}</p>
+          <p className="text-sm text-gray-500">Monthly Payments (USD)</p>
+          <p className="text-2xl font-bold">
+            {summary ? `$${summary.total_minimum_payment.toLocaleString()}` : '—'}
+          </p>
         </div>
         <div className="bg-white rounded-lg shadow p-4">
           <p className="text-sm text-gray-500">Active Debts</p>
@@ -192,7 +224,7 @@ export function DebtManager({ debts, onCreate, onUpdate, onDelete }: Props) {
               <div>
                 <h4 className="font-semibold">{debt.name}</h4>
                 <p className="text-sm text-gray-500">
-                  {debt.currency_code} • {(debt.interest_rate * 100).toFixed(1)}% APR
+                  {debt.currency_code} • {debt.interest_rate.toFixed(1)}% APR
                 </p>
               </div>
               <div className="text-right">
@@ -200,7 +232,7 @@ export function DebtManager({ debts, onCreate, onUpdate, onDelete }: Props) {
                   {debt.currency_code} {debt.current_balance.toLocaleString()}
                 </p>
                 <p className="text-sm text-gray-500">
-                  ${debt.minimum_payment}/mo
+                  {debt.currency_code} {debt.minimum_payment}/mo
                 </p>
               </div>
             </div>

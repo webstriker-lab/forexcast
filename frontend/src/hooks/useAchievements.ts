@@ -1,13 +1,18 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { checkinStreak, getBadges } from '../lib/apiClient'
 
 export interface Achievement {
   id: string
   badge_id: string
-  badge_name: string
-  badge_emoji: string
   earned_at: string
   metadata: Record<string, unknown> | null
+}
+
+export interface Badge {
+  name: string
+  emoji: string
+  description: string
 }
 
 export interface Streaks {
@@ -25,44 +30,49 @@ export interface Streaks {
 export function useAchievements() {
   const [achievements, setAchievements] = useState<Achievement[]>([])
   const [streaks, setStreaks] = useState<Streaks | null>(null)
+  const [badges, setBadges] = useState<Record<string, Badge>>({})
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
-    const [achievementsResult, streaksResult] = await Promise.all([
+    const [achievementsResult, streaksResult, badgesResult] = await Promise.all([
       supabase.from('achievements').select('*').order('earned_at', { ascending: false }),
-      supabase.from('streaks').select('*').single(),
+      supabase.from('streaks').select('*').maybeSingle(),
+      getBadges().catch((err: Error) => {
+        setError(err.message)
+        return {} as Record<string, Badge>
+      }),
     ])
-    
-    setAchievements(achievementsResult.data ?? [])
-    setStreaks(streaksResult.data)
+
+    if (achievementsResult.error) {
+      setError(achievementsResult.error.message)
+    } else {
+      setAchievements(achievementsResult.data ?? [])
+    }
+    if (streaksResult.error) {
+      setError(streaksResult.error.message)
+    } else {
+      setStreaks(streaksResult.data)
+    }
+    setBadges(badgesResult)
     setLoading(false)
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
 
   const recordCheckin = async () => {
-    // Update streak
-    const today = new Date().toISOString().split('T')[0]
-    const { data: currentStreaks } = await supabase
-      .from('streaks')
-      .select('*')
-      .single()
-
-    const lastCheckin = currentStreaks?.daily_checkin_last
-    const isConsecutive = lastCheckin === new Date(Date.now() - 86400000).toISOString().split('T')[0]
-    
-    const newStreak = {
-      daily_checkin_current: isConsecutive ? (currentStreaks?.daily_checkin_current || 0) + 1 : 1,
-      daily_checkin_best: Math.max(
-        currentStreaks?.daily_checkin_best || 0,
-        isConsecutive ? (currentStreaks?.daily_checkin_current || 0) + 1 : 1
-      ),
-      daily_checkin_last: today,
+    // Streak logic lives only in the backend (already correct, already
+    // tested via update_streak in app.planner.achievements) -- this used
+    // to reimplement it client-side, diverging in two ways: no same-day
+    // guard, and "today" computed via UTC instead of the backend's
+    // server-local date.
+    try {
+      await checkinStreak()
+      await fetchData()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Check-in failed')
     }
-
-    await supabase.from('streaks').upsert(newStreak, { onConflict: 'user_id' })
-    await fetchData()
   }
 
-  return { achievements, streaks, loading, recordCheckin, refetch: fetchData }
+  return { achievements, streaks, badges, loading, error, recordCheckin, refetch: fetchData }
 }

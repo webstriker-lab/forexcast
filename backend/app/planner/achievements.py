@@ -56,46 +56,34 @@ def check_debt_achievements(
     debts: list[dict],
     earned_badges: set[str],
 ) -> list[dict]:
-    """Check if any debt-related achievements should be earned.
-    
-    Args:
-        debts: List of debt dictionaries
-        earned_badges: Set of already-earned badge IDs
-    
-    Returns:
-        List of new achievements to award
+    """Check if any debt-related achievements should be earned. Returns
+    dicts shaped {"badge_id": str, "metadata": dict} only -- display data
+    (name/emoji/description) lives solely in BADGES, looked up by
+    badge_id by whoever renders these, never duplicated here.
     """
     new_achievements = []
-    
-    # Check for paid off debts
+
     paid_off = [d for d in debts if d.get("current_balance", 0) == 0 and not d.get("is_active", True)]
     if paid_off and "first_debt_paid_off" not in earned_badges:
         new_achievements.append({
             "badge_id": "first_debt_paid_off",
-            **BADGES["first_debt_paid_off"],
             "metadata": {"debt_name": paid_off[0].get("name", "Unknown")},
         })
-    
-    # Check for multi-currency
+
     active_currencies = {d["currency_code"] for d in debts if d.get("is_active", True)}
     if len(active_currencies) >= 3 and "multi_currency_master" not in earned_badges:
         new_achievements.append({
             "badge_id": "multi_currency_master",
-            **BADGES["multi_currency_master"],
             "metadata": {"currencies": list(active_currencies)},
         })
-    
-    # Check for financial freedom (all debts paid off)
+
     active_debts_with_balance = [
-        d for d in debts 
+        d for d in debts
         if d.get("is_active", True) and d.get("current_balance", 0) > 0
     ]
     if debts and not active_debts_with_balance and "financial_freedom" not in earned_badges:
-        new_achievements.append({
-            "badge_id": "financial_freedom",
-            **BADGES["financial_freedom"],
-        })
-    
+        new_achievements.append({"badge_id": "financial_freedom", "metadata": None})
+
     return new_achievements
 
 
@@ -103,33 +91,21 @@ def check_savings_achievements(
     goals: list[dict],
     earned_badges: set[str],
 ) -> list[dict]:
-    """Check if any savings-related achievements should be earned.
-    
-    Args:
-        goals: List of savings goal dictionaries
-        earned_badges: Set of already-earned badge IDs
-    
-    Returns:
-        List of new achievements to award
+    """Check if any savings-related achievements should be earned. See
+    check_debt_achievements' docstring for the return shape rationale.
     """
     new_achievements = []
-    
-    # Check for reached goals
+
     reached = [g for g in goals if g.get("current_saved", 0) >= g.get("target_amount", 0)]
     if reached and "savings_goal_reached" not in earned_badges:
         new_achievements.append({
             "badge_id": "savings_goal_reached",
-            **BADGES["savings_goal_reached"],
             "metadata": {"goal_name": reached[0].get("name", "Unknown")},
         })
-    
-    # Check for first goal set
+
     if goals and "first_goal_set" not in earned_badges:
-        new_achievements.append({
-            "badge_id": "first_goal_set",
-            **BADGES["first_goal_set"],
-        })
-    
+        new_achievements.append({"badge_id": "first_goal_set", "metadata": None})
+
     return new_achievements
 
 
@@ -181,23 +157,15 @@ def check_streak_achievements(
     streak_data: dict,
     earned_badges: set[str],
 ) -> list[dict]:
-    """Check if any streak-related achievements should be earned.
-    
-    Args:
-        streak_data: Current streak data
-        earned_badges: Set of already-earned badge IDs
-    
-    Returns:
-        List of new achievements to award
+    """Check if any streak-related achievements should be earned. See
+    check_debt_achievements' docstring for the return shape rationale.
     """
     new_achievements = []
-    
-    # Check for 30-day streak
+
     if streak_data.get("daily_checkin_current", 0) >= 30 and "streak_30_days" not in earned_badges:
         new_achievements.append({
             "badge_id": "streak_30_days",
-            **BADGES["streak_30_days"],
             "metadata": {"streak_days": streak_data["daily_checkin_current"]},
         })
-    
+
     return new_achievements

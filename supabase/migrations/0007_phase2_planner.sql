@@ -58,6 +58,7 @@ create table public.savings_goals (
     target_amount numeric not null check (target_amount > 0),
     current_saved numeric not null default 0 check (current_saved >= 0),
     target_date date,
+    monthly_contribution numeric check (monthly_contribution > 0),
     is_active boolean not null default true,
     created_at timestamptz not null default now()
 );
@@ -78,8 +79,6 @@ create table public.achievements (
     id uuid primary key default gen_random_uuid(),
     user_id uuid not null references auth.users (id) on delete cascade,
     badge_id text not null,
-    badge_name text not null,
-    badge_emoji text not null,
     earned_at timestamptz not null default now(),
     metadata jsonb,
     unique (user_id, badge_id)
