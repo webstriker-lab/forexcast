@@ -391,3 +391,28 @@ def test_delete_alert_for_user_returns_false_when_not_owned_or_missing():
         result = delete_alert_for_user("u1", "not-mine")
 
     assert result is False
+
+
+def test_update_alert_for_user_filters_unexpected_keys():
+    """Verifies that update_alert_for_user filters out unexpected keys
+    (like user_id) before sending to the PATCH request, preventing
+    column-injection attacks."""
+    response = MagicMock()
+    response.json.return_value = [{"id": "a1", "is_active": False}]
+    response.raise_for_status.return_value = None
+
+    with patch(
+        "app.recommendations.supabase_rest.httpx.patch", return_value=response
+    ) as mock_patch:
+        result = update_alert_for_user(
+            "u1", "a1", {"is_active": False, "user_id": "attacker-uuid"}
+        )
+
+    # Verify the function still returns the expected result
+    assert result == {"id": "a1", "is_active": False}
+
+    # Verify that the PATCH request body only contains allowed fields
+    json_body = mock_patch.call_args.kwargs["json"]
+    assert "user_id" not in json_body
+    assert "is_active" in json_body
+    assert json_body["is_active"] is False

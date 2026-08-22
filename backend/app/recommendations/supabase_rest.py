@@ -280,11 +280,13 @@ def update_alert_for_user(user_id: str, alert_id: str, fields: dict) -> dict | N
     agent's update_alert tool.
     """
     settings = get_settings()
+    # Filter fields to only allowed keys to prevent column-injection attacks
+    allowed_fields = {k: v for k, v in fields.items() if k in ("threshold_rate", "direction", "is_active")}
     response = httpx.patch(
         f"{settings.supabase_url}/rest/v1/alerts",
         params={"id": f"eq.{alert_id}", "user_id": f"eq.{user_id}"},
         headers=_headers(prefer="return=representation"),
-        json=fields,
+        json=allowed_fields,
         timeout=30.0,
     )
     response.raise_for_status()
