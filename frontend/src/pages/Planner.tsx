@@ -10,7 +10,7 @@ import { Link } from 'react-router-dom'
 export default function Planner() {
   const { debts, loading: debtsLoading } = useDebts()
   const { goals, loading: goalsLoading } = useSavingsGoals()
-  const { achievements, streaks, loading: achievementsLoading, recordCheckin } = useAchievements()
+  const { achievements, streaks, badges, loading: achievementsLoading, recordCheckin } = useAchievements()
 
   const activeDebts = debts.filter(d => d.is_active)
   const activeGoals = goals.filter(g => g.is_active)
@@ -61,7 +61,7 @@ export default function Planner() {
         {/* Recent Achievements */}
         <div>
           <h2 className="text-xl font-bold mb-4">Achievements</h2>
-          <BadgeGrid achievements={achievements} />
+          <BadgeGrid achievements={achievements} badges={badges} />
         </div>
 
         {/* Quick Actions */}
