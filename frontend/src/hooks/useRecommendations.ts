@@ -4,7 +4,7 @@ import { chooseRecommendation, deriveCrossPredictions } from '../lib/predictionM
 import { fetchCurrentRate, fetchUsdLegPredictions, PIVOT } from '../lib/predictionsData'
 
 export interface Recommendation {
-  recommendation: 'act_now' | 'wait' | 'volatile'
+  recommendation: 'act_now' | 'wait' | 'volatile' | 'no_signal'
   current_rate: number
   expected_rate: number
   lower_bound: number

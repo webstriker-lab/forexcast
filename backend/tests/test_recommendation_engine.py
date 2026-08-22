@@ -39,6 +39,28 @@ def test_choose_recommendation_act_now_when_current_already_best():
     assert result["recommendation"] == "act_now"
 
 
+def test_choose_recommendation_no_signal_when_current_equals_expected():
+    # This is exactly what happens when the reference horizon's backtest
+    # picked the naive/no-change model: predicted_rate == current_rate.
+    # Must NOT silently classify as act_now via the >= comparison.
+    horizons = [
+        {"horizon_days": 7, "predicted_rate": 90, "lower_bound": 88, "upper_bound": 92, "confidence": "normal"},
+    ]
+    result = choose_recommendation(90, horizons, favorable_high=True)
+    assert result["recommendation"] == "no_signal"
+
+
+def test_choose_recommendation_low_confidence_still_wins_over_no_signal():
+    # confidence takes priority: an exact tie that's ALSO low-confidence
+    # is "volatile", not "no_signal" -- the volatility warning shouldn't
+    # be silently dropped just because the point forecast also ties.
+    horizons = [
+        {"horizon_days": 7, "predicted_rate": 90, "lower_bound": 88, "upper_bound": 92, "confidence": "low"},
+    ]
+    result = choose_recommendation(90, horizons, favorable_high=True)
+    assert result["recommendation"] == "volatile"
+
+
 def test_choose_recommendation_volatile_when_reference_horizon_low_confidence():
     horizons = [dict(h) for h in HORIZONS]
     horizons[3] = {**horizons[3], "confidence": "low"}

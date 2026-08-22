@@ -44,7 +44,7 @@ TOOL_SCHEMAS = [
         "type": "function",
         "function": {
             "name": "get_recommendation",
-            "description": "Get the latest act_now/wait/volatile recommendation for 1 USD to a given currency.",
+            "description": "Get the latest act_now/wait/volatile/no_signal recommendation for 1 USD to a given currency. no_signal means the backtested model has no directional edge for this pair (it's using a no-change baseline) -- say so plainly rather than framing it as a call to act.",
             "parameters": {
                 "type": "object",
                 "properties": {

@@ -54,7 +54,7 @@ export function deriveCrossPredictions(
 }
 
 export interface RecommendationResult {
-  recommendation: 'act_now' | 'wait' | 'volatile'
+  recommendation: 'act_now' | 'wait' | 'volatile' | 'no_signal'
   current_rate: number
   expected_rate: number
   lower_bound: number
@@ -67,6 +67,17 @@ export interface RecommendationResult {
 // own "higher rate = more of the target currency = favorable" space
 // before this runs (the reverse direction via invertPrediction), and that
 // holds for any base->quote pair, not just USD-pivot ones.
+//
+// currentRate === reference.predicted_rate exactly is "no_signal", not
+// act_now: it's what happens whenever the reference horizon's backtest
+// picked the naive/no-change baseline -- there's no forecast basis to
+// call that a directional signal. This equality is exact and reliable
+// for USD-pivot pairs (backend: both values trace to the same
+// rates_cache row). For a derived cross pair it's a best-effort check --
+// currentRate comes from the materialized cross rate while
+// reference.predicted_rate is a ratio of two independently-fetched
+// USD-pivot predictions, so a naive-vs-naive tie can occasionally miss
+// by a hair due to snapshot timing or floating-point division order.
 export function chooseRecommendation(
   currentRate: number,
   horizons: RawPrediction[],
@@ -76,7 +87,13 @@ export function chooseRecommendation(
   }
   const reference = horizons.reduce((best, h) => (h.predicted_rate > best.predicted_rate ? h : best))
   const recommendation =
-    reference.confidence === 'low' ? 'volatile' : currentRate >= reference.predicted_rate ? 'act_now' : 'wait'
+    reference.confidence === 'low'
+      ? 'volatile'
+      : currentRate === reference.predicted_rate
+        ? 'no_signal'
+        : currentRate >= reference.predicted_rate
+          ? 'act_now'
+          : 'wait'
   return {
     recommendation,
     current_rate: currentRate,

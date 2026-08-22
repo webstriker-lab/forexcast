@@ -99,4 +99,22 @@ describe('chooseRecommendation', () => {
   it('throws on an empty horizon list', () => {
     expect(() => chooseRecommendation(1.0, [])).toThrow()
   })
+
+  it('reports no_signal when current rate exactly equals the reference forecast', () => {
+    // Exactly what happens when the reference horizon's backtest picked
+    // the naive/no-change baseline -- must not silently read as act_now.
+    const horizons = [pred({ horizon_days: 7, predicted_rate: 1.0 })]
+
+    const result = chooseRecommendation(1.0, horizons)
+
+    expect(result.recommendation).toBe('no_signal')
+  })
+
+  it('low confidence still wins over no_signal on an exact tie', () => {
+    const horizons = [pred({ horizon_days: 7, predicted_rate: 1.0, confidence: 'low' })]
+
+    const result = chooseRecommendation(1.0, horizons)
+
+    expect(result.recommendation).toBe('volatile')
+  })
 })

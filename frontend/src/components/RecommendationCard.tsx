@@ -4,6 +4,10 @@ const STYLES = {
   act_now: { bg: 'bg-green-50 border-green-200', badge: 'bg-green-100 text-green-800', label: 'ACT NOW', emoji: '🟢' },
   wait: { bg: 'bg-yellow-50 border-yellow-200', badge: 'bg-yellow-100 text-yellow-800', label: 'WAIT', emoji: '🟡' },
   volatile: { bg: 'bg-red-50 border-red-200', badge: 'bg-red-100 text-red-800', label: 'VOLATILE', emoji: '🔴' },
+  // The backtested model has no directional edge for this pair (it's
+  // using a no-change baseline) -- deliberately neutral gray, not green,
+  // so it never reads as a confident call to act.
+  no_signal: { bg: 'bg-gray-50 border-gray-200', badge: 'bg-gray-100 text-gray-700', label: 'NO SIGNAL', emoji: '⚪' },
 }
 
 interface Props {
@@ -48,6 +52,12 @@ export function RecommendationCard({ rec, pair }: Props) {
           <span className="font-medium">{new Date(rec.generated_at).toLocaleDateString()}</span>
         </div>
       </div>
+      {rec.recommendation === 'no_signal' && (
+        <p className="text-xs text-gray-500 mt-3">
+          The backtested model has no directional edge for this pair right now (it's using a
+          no-change baseline) — the range above is the honest historical spread, not a forecasted move.
+        </p>
+      )}
     </div>
   )
 }
