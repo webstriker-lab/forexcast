@@ -1,7 +1,9 @@
 from unittest.mock import MagicMock, patch
 
 from app.recommendations.supabase_rest import (
+    create_alert_for_user,
     deactivate_alert,
+    delete_alert_for_user,
     get_active_alerts,
     get_current_rate,
     get_directed_rate,
@@ -9,7 +11,9 @@ from app.recommendations.supabase_rest import (
     get_latest_recommendation,
     get_latest_two_recommendations,
     insert_recommendations,
+    list_alerts_for_user,
     record_alert_event,
+    update_alert_for_user,
 )
 
 
@@ -289,3 +293,101 @@ def test_get_latest_recommendation_returns_none_when_no_rows_exist():
         result = get_latest_recommendation("INR")
 
     assert result is None
+
+
+def test_create_alert_for_user_posts_with_usd_base_and_returns_created_row():
+    response = MagicMock()
+    response.json.return_value = [
+        {
+            "id": "a1",
+            "user_id": "u1",
+            "base_code": "USD",
+            "quote_code": "EUR",
+            "alert_type": "threshold",
+            "threshold_rate": 1.1,
+            "direction": "below",
+            "is_active": True,
+            "created_at": "2026-08-22T10:00:00+00:00",
+        }
+    ]
+    response.raise_for_status.return_value = None
+
+    with patch(
+        "app.recommendations.supabase_rest.httpx.post", return_value=response
+    ) as mock_post:
+        result = create_alert_for_user("u1", "EUR", "threshold", 1.1, "below")
+
+    assert result["id"] == "a1"
+    payload = mock_post.call_args.kwargs["json"]
+    assert payload["user_id"] == "u1"
+    assert payload["base_code"] == "USD"
+    assert payload["quote_code"] == "EUR"
+    assert payload["threshold_rate"] == 1.1
+    assert payload["direction"] == "below"
+
+
+def test_list_alerts_for_user_filters_by_user_id():
+    response = MagicMock()
+    response.json.return_value = [{"id": "a1"}, {"id": "a2"}]
+    response.raise_for_status.return_value = None
+
+    with patch(
+        "app.recommendations.supabase_rest.httpx.get", return_value=response
+    ) as mock_get:
+        result = list_alerts_for_user("u1")
+
+    assert len(result) == 2
+    assert mock_get.call_args.kwargs["params"]["user_id"] == "eq.u1"
+
+
+def test_update_alert_for_user_returns_updated_row_when_owned():
+    response = MagicMock()
+    response.json.return_value = [{"id": "a1", "is_active": False}]
+    response.raise_for_status.return_value = None
+
+    with patch(
+        "app.recommendations.supabase_rest.httpx.patch", return_value=response
+    ) as mock_patch:
+        result = update_alert_for_user("u1", "a1", {"is_active": False})
+
+    assert result == {"id": "a1", "is_active": False}
+    assert mock_patch.call_args.kwargs["params"]["id"] == "eq.a1"
+    assert mock_patch.call_args.kwargs["params"]["user_id"] == "eq.u1"
+    assert mock_patch.call_args.kwargs["json"] == {"is_active": False}
+
+
+def test_update_alert_for_user_returns_none_when_not_owned_or_missing():
+    response = MagicMock()
+    response.json.return_value = []
+    response.raise_for_status.return_value = None
+
+    with patch("app.recommendations.supabase_rest.httpx.patch", return_value=response):
+        result = update_alert_for_user("u1", "not-mine", {"is_active": False})
+
+    assert result is None
+
+
+def test_delete_alert_for_user_returns_true_when_a_row_was_deleted():
+    response = MagicMock()
+    response.json.return_value = [{"id": "a1"}]
+    response.raise_for_status.return_value = None
+
+    with patch(
+        "app.recommendations.supabase_rest.httpx.delete", return_value=response
+    ) as mock_delete:
+        result = delete_alert_for_user("u1", "a1")
+
+    assert result is True
+    assert mock_delete.call_args.kwargs["params"]["id"] == "eq.a1"
+    assert mock_delete.call_args.kwargs["params"]["user_id"] == "eq.u1"
+
+
+def test_delete_alert_for_user_returns_false_when_not_owned_or_missing():
+    response = MagicMock()
+    response.json.return_value = []
+    response.raise_for_status.return_value = None
+
+    with patch("app.recommendations.supabase_rest.httpx.delete", return_value=response):
+        result = delete_alert_for_user("u1", "not-mine")
+
+    assert result is False

@@ -219,3 +219,91 @@ def get_latest_recommendation(quote_code: str) -> dict | None:
         "reference_horizon_days": row["reference_horizon_days"],
         "generated_at": row["generated_at"],
     }
+
+
+def create_alert_for_user(
+    user_id: str,
+    quote_code: str,
+    alert_type: str,
+    threshold_rate: float | None,
+    direction: str | None,
+) -> dict:
+    """Creates a new alert owned by `user_id`, base_code always 'USD'
+    (confirmed live -- every predictions/rates_cache row uses USD as
+    base). Used by the LLM agent's create_alert tool.
+    """
+    settings = get_settings()
+    payload = {
+        "user_id": user_id,
+        "base_code": "USD",
+        "quote_code": quote_code,
+        "alert_type": alert_type,
+        "threshold_rate": threshold_rate,
+        "direction": direction,
+    }
+    response = httpx.post(
+        f"{settings.supabase_url}/rest/v1/alerts",
+        headers=_headers(prefer="return=representation"),
+        json=payload,
+        timeout=30.0,
+    )
+    response.raise_for_status()
+    return response.json()[0]
+
+
+def list_alerts_for_user(user_id: str) -> list[dict]:
+    """Used by the LLM agent's list_alerts tool."""
+    settings = get_settings()
+    response = httpx.get(
+        f"{settings.supabase_url}/rest/v1/alerts",
+        params={
+            "select": "id,base_code,quote_code,alert_type,threshold_rate,direction,is_active,created_at",
+            "user_id": f"eq.{user_id}",
+            "order": "created_at.desc",
+        },
+        headers=_headers(),
+        timeout=30.0,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def update_alert_for_user(user_id: str, alert_id: str, fields: dict) -> dict | None:
+    """`fields` may contain any of threshold_rate/direction/is_active.
+    Filters by both id and user_id in the same request -- ownership is
+    enforced atomically by the filter itself, not by a separate
+    check-then-act query (which would have a race between the check and
+    the update). Returns the updated row, or None if no alert with
+    `alert_id` belongs to `user_id` -- PostgREST simply matches zero
+    rows rather than erroring, so the LLM agent's update_alert tool
+    reports this as "not found" rather than raising. Used by the LLM
+    agent's update_alert tool.
+    """
+    settings = get_settings()
+    response = httpx.patch(
+        f"{settings.supabase_url}/rest/v1/alerts",
+        params={"id": f"eq.{alert_id}", "user_id": f"eq.{user_id}"},
+        headers=_headers(prefer="return=representation"),
+        json=fields,
+        timeout=30.0,
+    )
+    response.raise_for_status()
+    rows = response.json()
+    return rows[0] if rows else None
+
+
+def delete_alert_for_user(user_id: str, alert_id: str) -> bool:
+    """Returns True if an alert was deleted, False if none matched
+    (either it doesn't exist or belongs to another user) -- same
+    atomic-filter reasoning as update_alert_for_user. Used by the LLM
+    agent's delete_alert tool.
+    """
+    settings = get_settings()
+    response = httpx.delete(
+        f"{settings.supabase_url}/rest/v1/alerts",
+        params={"id": f"eq.{alert_id}", "user_id": f"eq.{user_id}"},
+        headers=_headers(prefer="return=representation"),
+        timeout=30.0,
+    )
+    response.raise_for_status()
+    return len(response.json()) > 0
