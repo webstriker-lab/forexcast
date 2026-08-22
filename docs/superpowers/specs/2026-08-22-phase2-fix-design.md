@@ -126,6 +126,16 @@ list[str]` field is added to the summary so the frontend can say "total
 excludes N debts pending a rate" rather than silently under-reporting with
 no explanation.
 
+`DebtManager.tsx`'s own summary cards compute their own client-side total
+(`activeDebts.reduce((sum, d) => sum + d.current_balance, 0)`) — the same
+cross-currency bug, independently, in a second place. Fixing only the
+backend calculator leaves this displayed number wrong. `DebtManager.tsx`
+must fetch `GET /planner/timeline/debts` (already exists, already returns
+`summary.total_balance`) and use that value instead of its own reduce —
+one converted total, not two that can disagree. Add a small authenticated
+`getDebtTimeline()` to `frontend/src/lib/apiClient.ts`, following the
+existing `chat()` function's pattern (session token, JSON error handling).
+
 ## 6. Mechanical fixes (matching this codebase's established patterns)
 
 - **Field allowlists**: `update_debt`/`update_income`/`update_savings_goal`
@@ -180,7 +190,21 @@ now-authenticated `/badges`).
   `metadata` — no `name`/`emoji`/`description` keys — closing the exact
   gap that let the original mismatch ship silently.
 
-## 9. Migration revision
+## 9. Frontend hooks: same missing-`user_id` bug as the Dashboard fix
+
+`useDebts.ts`, `useSavingsGoals.ts`, and `useAchievements.ts` write
+directly to Supabase via the anon-key/RLS client (matching this project's
+established pattern of not routing simple owner-scoped CRUD through a
+backend route — the backend `/planner/debts`/`/income`/`/goals` CRUD
+routes exist and are fixed by §6 for any other consumer, but the shipped
+frontend doesn't call them, exactly like `alerts`/`watchlist` on the
+Dashboard). Their inserts omit `user_id`, the identical Critical bug
+already fixed in the Dashboard UI recovery — `useDebts.createDebt`,
+`useSavingsGoals.createGoal`, and `useAchievements`' achievement-insert
+path all need `user_id: session.user.id` added, and all three hooks need
+their discarded errors surfaced, matching that same fix's shape.
+
+## 10. Migration revision
 
 `supabase/migrations/0007_phase2_planner.sql` is edited in place (not
 migration `0008`) since it has never been applied — `debts`/`income`
