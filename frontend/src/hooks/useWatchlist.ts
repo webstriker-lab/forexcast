@@ -49,7 +49,12 @@ export function useWatchlist() {
       .from('watchlist')
       .insert({ base_code: base, quote_code: quote, user_id: session.user.id })
     if (insertError) {
-      setError(insertError.message)
+      // Unique constraint violation = pair already in watchlist
+      if (insertError.code === '23505') {
+        setError(`${base}/${quote} is already in your watchlist`)
+      } else {
+        setError(insertError.message)
+      }
       return false
     }
     setError(null)
