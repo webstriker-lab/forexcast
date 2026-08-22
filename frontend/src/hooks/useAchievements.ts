@@ -52,7 +52,25 @@ export function useAchievements() {
     if (streaksResult.error) {
       setError(streaksResult.error.message)
     } else {
-      setStreaks(streaksResult.data)
+      // .maybeSingle() returns null both when the row genuinely doesn't
+      // exist yet (a user who's never checked in) and would otherwise be
+      // indistinguishable from "still loading" to StreakCounter, which
+      // renders its loading state on any null streaks -- default to an
+      // explicit zero-value object so a real, permanent zero state
+      // renders instead of an infinite "Loading streaks...".
+      setStreaks(
+        streaksResult.data ?? {
+          daily_checkin_current: 0,
+          daily_checkin_best: 0,
+          daily_checkin_last: null,
+          savings_current: 0,
+          savings_best: 0,
+          savings_last: null,
+          debt_payment_current: 0,
+          debt_payment_best: 0,
+          debt_payment_last: null,
+        },
+      )
     }
     setBadges(badgesResult)
     setLoading(false)
