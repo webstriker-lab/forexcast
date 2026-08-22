@@ -17,6 +17,7 @@ export function useRates(base: string, quote: string) {
     if (!base || !quote) return
     let cancelled = false
     setLoading(true)
+    setError(null)
 
     const cutoff = new Date()
     cutoff.setDate(cutoff.getDate() - HISTORY_DAYS)

@@ -28,10 +28,14 @@ export function SettingsPage() {
   }, [])
 
   const loadSettings = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('llm_settings')
       .select('provider, model')
       .maybeSingle()
+    if (error) {
+      setMessage(`Error: ${error.message}`)
+      return
+    }
     if (data) {
       setProvider(data.provider)
       setModel(data.model || '')
@@ -39,10 +43,15 @@ export function SettingsPage() {
   }
 
   const loadTelegramStatus = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('notification_settings')
       .select('telegram_chat_id')
       .maybeSingle()
+    if (error) {
+      setMessage(`Error: ${error.message}`)
+      setTelegramStatus('not_linked')
+      return
+    }
     setTelegramStatus(data?.telegram_chat_id ? 'linked' : 'not_linked')
   }
 

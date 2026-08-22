@@ -19,6 +19,7 @@ export function usePredictions(base: string, quote: string) {
     if (!base || !quote) return
     let cancelled = false
     setLoading(true)
+    setError(null)
 
     async function load() {
       // Mirror the backend's own get_latest_predictions: find the exact

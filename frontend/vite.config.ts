@@ -28,6 +28,14 @@ export default defineConfig({
   optimizeDeps: {
     include: ['libsodium-wrappers'],
   },
+  build: {
+    // libsodium-wrappers' ESM build uses a top-level `await` internally.
+    // Vite's default esbuild transpile target (~es2020) predates
+    // browser support for that syntax and fails to compile it; es2022
+    // is the first target where esbuild leaves top-level await alone,
+    // and is safely below every evergreen browser's baseline by now.
+    target: 'es2022',
+  },
   test: {
     environment: 'jsdom',
     globals: true,

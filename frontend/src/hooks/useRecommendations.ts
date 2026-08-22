@@ -20,6 +20,7 @@ export function useRecommendations(base: string, quote: string) {
     if (!base || !quote) return
     let cancelled = false
     setLoading(true)
+    setError(null)
     supabase
       .from('recommendations')
       .select('recommendation, current_rate, expected_rate, lower_bound, upper_bound, reference_horizon_days, generated_at')
