@@ -25,6 +25,9 @@ export default defineConfig({
       },
     }),
   ],
+  optimizeDeps: {
+    include: ['libsodium-wrappers'],
+  },
   test: {
     environment: 'jsdom',
     globals: true,

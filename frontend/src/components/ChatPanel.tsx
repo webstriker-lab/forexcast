@@ -5,6 +5,10 @@ interface Message {
   role: 'user' | 'assistant'
   content: string
   tool_calls?: { tool: string; arguments: Record<string, unknown>; result: unknown }[]
+  // Local-only display message (a failed request) -- never sent back to
+  // the model as conversation history, so an "Error: HTTP 400" string
+  // can't end up being fed to the LLM as if it were something it said.
+  isError?: boolean
 }
 
 export function ChatPanel() {
@@ -26,7 +30,8 @@ export function ChatPanel() {
     setLoading(true)
 
     try {
-      const res = await chat(newMessages.map(m => ({ role: m.role, content: m.content })))
+      const history = newMessages.filter(m => !m.isError).map(m => ({ role: m.role, content: m.content }))
+      const res = await chat(history)
       const assistantMsg: Message = {
         role: 'assistant',
         content: res.message?.content || 'No response',
@@ -36,7 +41,11 @@ export function ChatPanel() {
     } catch (err) {
       setMessages([
         ...newMessages,
-        { role: 'assistant', content: `Error: ${err instanceof Error ? err.message : 'Unknown error'}` },
+        {
+          role: 'assistant',
+          content: `Error: ${err instanceof Error ? err.message : 'Unknown error'}`,
+          isError: true,
+        },
       ])
     }
     setLoading(false)

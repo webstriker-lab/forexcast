@@ -8,18 +8,33 @@ import { RecommendationCard } from '../components/RecommendationCard'
 import { Layout } from '../components/Layout'
 
 export default function Dashboard() {
-  const { pairs, selected, setSelected, addPair, removePair, loading: watchlistLoading } = useWatchlist()
+  const {
+    pairs,
+    selected,
+    setSelected,
+    addPair,
+    removePair,
+    loading: watchlistLoading,
+    error: watchlistError,
+  } = useWatchlist()
   const base = selected?.base_code ?? ''
   const quote = selected?.quote_code ?? ''
-  const { rates, loading: ratesLoading } = useRates(base, quote)
-  const { predictions, loading: predLoading } = usePredictions(base, quote)
-  const { rec, loading: recLoading } = useRecommendations(base, quote)
+  const { rates, loading: ratesLoading, error: ratesError } = useRates(base, quote)
+  const { predictions, loading: predLoading, error: predError } = usePredictions(base, quote)
+  const { rec, loading: recLoading, error: recError } = useRecommendations(base, quote)
 
   const pair = base && quote ? `${base}/${quote}` : ''
+  const error = watchlistError || ratesError || predError || recError
 
   return (
     <Layout>
       <div className="space-y-6">
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+            {error}
+          </div>
+        )}
+
         {/* Pair picker */}
         <PairPicker
           pairs={pairs}

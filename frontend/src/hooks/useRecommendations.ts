@@ -14,9 +14,11 @@ export interface Recommendation {
 export function useRecommendations(base: string, quote: string) {
   const [rec, setRec] = useState<Recommendation | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!base || !quote) return
+    let cancelled = false
     setLoading(true)
     supabase
       .from('recommendations')
@@ -25,12 +27,22 @@ export function useRecommendations(base: string, quote: string) {
       .eq('quote_code', quote)
       .order('generated_at', { ascending: false })
       .limit(1)
-      .single()
-      .then(({ data }) => {
-        setRec(data)
+      .maybeSingle()
+      .then(({ data, error: fetchError }) => {
+        if (cancelled) return
+        if (fetchError) {
+          setError(fetchError.message)
+        } else {
+          setError(null)
+          setRec(data)
+        }
         setLoading(false)
       })
+
+    return () => {
+      cancelled = true
+    }
   }, [base, quote])
 
-  return { rec, loading }
+  return { rec, loading, error }
 }

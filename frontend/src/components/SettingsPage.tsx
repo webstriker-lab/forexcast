@@ -1,5 +1,9 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
+import { sealBox } from '../lib/encryption'
+import { useAuth } from '../contexts/AuthContext'
+
+const LLM_SETTINGS_PUBLIC_KEY = import.meta.env.VITE_LLM_SETTINGS_PUBLIC_KEY as string | undefined
 
 const PROVIDERS = [
   { value: 'openrouter', label: 'OpenRouter' },
@@ -10,6 +14,7 @@ const PROVIDERS = [
 ]
 
 export function SettingsPage() {
+  const { session } = useAuth()
   const [provider, setProvider] = useState('openrouter')
   const [apiKey, setApiKey] = useState('')
   const [model, setModel] = useState('')
@@ -26,7 +31,7 @@ export function SettingsPage() {
     const { data } = await supabase
       .from('llm_settings')
       .select('provider, model')
-      .single()
+      .maybeSingle()
     if (data) {
       setProvider(data.provider)
       setModel(data.model || '')
@@ -37,23 +42,41 @@ export function SettingsPage() {
     const { data } = await supabase
       .from('notification_settings')
       .select('telegram_chat_id')
-      .single()
+      .maybeSingle()
     setTelegramStatus(data?.telegram_chat_id ? 'linked' : 'not_linked')
   }
 
   const handleSave = async () => {
+    if (!session) {
+      setMessage('Error: not signed in')
+      return
+    }
     setSaving(true)
     setMessage('')
-    // Note: In production, the API key would be encrypted client-side with
-    // TweetNaCl sealed-box before writing. For now, we write the provider/model.
+
+    const payload: { user_id: string; provider: string; model: string | null; api_key_encrypted?: string } = {
+      user_id: session.user.id,
+      provider,
+      model: model || null,
+    }
+
+    // Only touch api_key_encrypted when the user actually typed a new key --
+    // leaving the field blank (e.g. when just switching provider/model)
+    // must never overwrite an already-saved key.
+    if (apiKey) {
+      if (!LLM_SETTINGS_PUBLIC_KEY) {
+        setMessage('Error: LLM encryption is not configured for this deployment (missing VITE_LLM_SETTINGS_PUBLIC_KEY).')
+        setSaving(false)
+        return
+      }
+      payload.api_key_encrypted = await sealBox(apiKey, LLM_SETTINGS_PUBLIC_KEY)
+    }
+
     const { error } = await supabase
       .from('llm_settings')
-      .upsert({
-        provider,
-        model: model || null,
-        api_key_encrypted: apiKey || 'placeholder', // Will be encrypted in production
-      }, { onConflict: 'user_id' })
+      .upsert(payload, { onConflict: 'user_id' })
     setMessage(error ? `Error: ${error.message}` : 'Settings saved!')
+    if (!error) setApiKey('')
     setSaving(false)
   }
 

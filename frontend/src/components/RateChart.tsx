@@ -64,9 +64,17 @@ export function RateChart({ rates, predictions, pair }: Props) {
         borderColor: 'rgb(16, 185, 129)',
         borderDash: [6, 3],
         pointRadius: 5,
-        pointBackgroundColor: predictions.map(p =>
-          p.confidence === 'low' ? 'rgb(245, 158, 11)' : 'rgb(16, 185, 129)'
-        ),
+        // Chart.js indexes an array-valued point option against the
+        // dataset's own data array by position, not against `predictions`
+        // alone -- predictedData is padded with `data.length` leading
+        // null/anchor entries before the real prediction points start, so
+        // this color array must be padded the exact same way or every
+        // color lands on the wrong point (the low-confidence marker would
+        // never actually render).
+        pointBackgroundColor: [
+          ...Array(data.length).fill('rgb(16, 185, 129)'),
+          ...predictions.map(p => (p.confidence === 'low' ? 'rgb(245, 158, 11)' : 'rgb(16, 185, 129)')),
+        ],
         borderWidth: 2,
       },
       {

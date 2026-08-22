@@ -1,23 +1,27 @@
-import nacl from 'tweetnacl'
-import { decodeBase64, encodeBase64 } from 'tweetnacl-util'
+import sodium from 'libsodium-wrappers'
 
 /**
- * Encrypts a message using NaCl box with an ephemeral keypair.
- * This simulates sealed-box encryption: the sender generates a
- * one-time keypair, encrypts, and discards the secret key.
- * The public key is the server's LLM_SETTINGS_PUBLIC_KEY (base64).
- * Returns the ciphertext (ephemeral pubkey + nonce + box) as base64.
+ * Encrypts a message with libsodium's crypto_box_seal (anonymous sealed
+ * box) so the backend's PyNaCl `SealedBox.decrypt()` can recover it --
+ * see backend/app/agent/crypto.py. Both libsodium-wrappers (here) and
+ * PyNaCl (backend) bind the same underlying libsodium C library, so
+ * this is wire-compatible by construction: unlike a hand-rolled
+ * "ephemeral keypair + nacl.box + transmitted nonce" scheme (which is
+ * NOT the same format -- crypto_box_seal derives its nonce
+ * deterministically from blake2b(ephemeral_pk || recipient_pk) and
+ * never transmits one), this produces exactly
+ * `ephemeral_public_key (32 bytes) || box_ciphertext`, the only shape
+ * SealedBox.decrypt understands.
+ *
+ * `publicKeyBase64` is the recipient's public key (standard, padded
+ * base64 -- matching Python's `base64.b64encode` output), and the
+ * return value is standard base64 ciphertext ready to write into
+ * `llm_settings.api_key_encrypted`.
  */
-export function sealBox(message: string, publicKeyBase64: string): string {
-  const pubKey = decodeBase64(publicKeyBase64)
-  const ephemeral = nacl.box.keyPair()
-  const nonce = nacl.randomBytes(nacl.box.nonceLength)
-  const messageBytes = new TextEncoder().encode(message)
-  const sealed = nacl.box(messageBytes, nonce, pubKey, ephemeral.secretKey)
-  // Prepend ephemeral public key + nonce to ciphertext
-  const combined = new Uint8Array(ephemeral.publicKey.length + nonce.length + sealed.length)
-  combined.set(ephemeral.publicKey)
-  combined.set(nonce, ephemeral.publicKey.length)
-  combined.set(sealed, ephemeral.publicKey.length + nonce.length)
-  return encodeBase64(combined)
+export async function sealBox(message: string, publicKeyBase64: string): Promise<string> {
+  await sodium.ready
+  const publicKey = sodium.from_base64(publicKeyBase64, sodium.base64_variants.ORIGINAL)
+  const messageBytes = sodium.from_string(message)
+  const sealed = sodium.crypto_box_seal(messageBytes, publicKey)
+  return sodium.to_base64(sealed, sodium.base64_variants.ORIGINAL)
 }
