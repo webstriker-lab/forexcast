@@ -1,0 +1,30 @@
+# .github/workflows/notify.yml
+name: Send notifications
+
+on:
+  schedule:
+    # Every 5 minutes -- tighter than this repo's other daily jobs,
+    # deliberately: a user actively linking Telegram in Settings expects
+    # near-immediate confirmation, and notified_at-gated dispatch means
+    # an idle run with nothing pending costs nothing extra.
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - name: Run notifications job
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        run: python -m app.notifications.cli
