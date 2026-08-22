@@ -48,23 +48,29 @@ def test_summarize_computes_percentiles_and_sample_count():
     assert result["volatility_p90"] > 0.04
 
 
-def test_run_backtest_collects_differentials_parallel_to_errors():
+def test_run_backtest_collects_named_factors_parallel_to_errors():
     rates = [100.0 + i for i in range(150)]
     # MIN_HISTORY=60, ORIGIN_SPACING=30 -> origins at 60, 90, 120
-    differentials = [0.01 * i for i in range(150)]
-    results = run_backtest(rates, horizons=[7], differentials=differentials)
-    assert results[7]["differentials"] == [
-        differentials[60], differentials[90], differentials[120]
+    rate_diffs = [0.01 * i for i in range(150)]
+    cpi_diffs = [0.02 * i for i in range(150)]
+    results = run_backtest(
+        rates, horizons=[7], factors={"interest_rate": rate_diffs, "cpi": cpi_diffs}
+    )
+    assert results[7]["factors"]["interest_rate"] == [
+        rate_diffs[60], rate_diffs[90], rate_diffs[120]
     ]
-    assert len(results[7]["differentials"]) == len(results[7]["errors"])
+    assert results[7]["factors"]["cpi"] == [
+        cpi_diffs[60], cpi_diffs[90], cpi_diffs[120]
+    ]
+    assert len(results[7]["factors"]["interest_rate"]) == len(results[7]["errors"])
 
 
-def test_run_backtest_differentials_none_entries_pass_through():
+def test_run_backtest_factor_none_entries_pass_through():
     rates = [100.0 + i for i in range(150)]
-    differentials = [None] * 70 + [0.5] * 80  # unknown until day 70
-    results = run_backtest(rates, horizons=[7], differentials=differentials)
+    rate_diffs = [None] * 70 + [0.5] * 80  # unknown until day 70
+    results = run_backtest(rates, horizons=[7], factors={"interest_rate": rate_diffs})
     # origin 60 falls in the None region, origins 90/120 don't
-    assert results[7]["differentials"] == [None, 0.5, 0.5]
+    assert results[7]["factors"]["interest_rate"] == [None, 0.5, 0.5]
 
 
 def test_fit_regression_recovers_known_slope_with_enough_significant_samples():
@@ -100,12 +106,13 @@ def test_fit_regression_returns_none_when_relationship_is_not_significant():
     assert fit_regression(errors, differentials) is None
 
 
-def test_summarize_stores_none_regression_when_no_differentials_key():
+def test_summarize_stores_none_regression_when_no_factors_key():
     samples = {
         "errors": [-2.0, -1.0, 0.0, 1.0, 2.0],
         "trailing_vols": [0.01, 0.02, 0.03, 0.04, 0.05],
     }
     result = summarize(samples)
+    assert result["regression_factor"] is None
     assert result["regression_slope"] is None
     assert result["regression_intercept"] is None
 
@@ -118,9 +125,10 @@ def test_summarize_fits_and_applies_regression_to_bounds():
     samples = {
         "errors": errors,
         "trailing_vols": [0.01] * 30,
-        "differentials": differentials,
+        "factors": {"interest_rate": differentials},
     }
     result = summarize(samples)
+    assert result["regression_factor"] == "interest_rate"
     assert result["regression_slope"] is not None
     assert abs(result["regression_slope"] - 0.004) < 0.001
     # Post-adjustment residuals must be tighter than the raw error spread,
@@ -128,6 +136,27 @@ def test_summarize_fits_and_applies_regression_to_bounds():
     raw_spread = max(errors) - min(errors)
     fitted_spread = result["error_upper_pct"] - result["error_lower_pct"]
     assert fitted_spread < raw_spread
+
+
+def test_summarize_picks_whichever_factor_has_the_lowest_residual_mae():
+    import random
+    random.seed(11)
+    n = 30
+    base = [i * 0.2 - 2.0 for i in range(n)]
+    errors = [0.004 * d - 0.01 + random.uniform(-0.0005, 0.0005) for d in base]
+    # interest_rate IS the exact series errors were built from (tight fit).
+    # cpi tracks the same underlying trend but with heavy added noise --
+    # still a real, significant relationship, just a much worse fit --
+    # so interest_rate must win on lower residual MAE.
+    interest_rate = base
+    cpi = [d + random.uniform(-1.0, 1.0) for d in base]
+    samples = {
+        "errors": errors,
+        "trailing_vols": [0.01] * n,
+        "factors": {"cpi": cpi, "interest_rate": interest_rate},
+    }
+    result = summarize(samples)
+    assert result["regression_factor"] == "interest_rate"
 
 
 def test_run_backtest_collects_naive_errors_parallel_to_errors():
@@ -192,10 +221,11 @@ def test_summarize_skips_regression_when_naive_selected():
         "errors": errors,
         "naive_errors": [0.0001] * 30,
         "trailing_vols": [0.01] * 30,
-        "differentials": differentials,
+        "factors": {"interest_rate": differentials},
     }
     result = summarize(samples)
     assert result["model_selected"] == "naive"
+    assert result["regression_factor"] is None
     assert result["regression_slope"] is None
     assert result["regression_intercept"] is None
 
@@ -224,8 +254,9 @@ def test_summarize_falls_back_to_raw_error_for_unpaired_origins():
     samples = {
         "errors": errors,
         "trailing_vols": [0.01] * 27,
-        "differentials": differentials,
+        "factors": {"interest_rate": differentials},
     }
     result = summarize(samples)
+    assert result["regression_factor"] == "interest_rate"
     assert result["regression_slope"] is not None
     assert result["error_upper_pct"] > 0.1

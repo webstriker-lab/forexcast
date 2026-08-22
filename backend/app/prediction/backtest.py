@@ -11,7 +11,7 @@ MIN_HISTORY = 60  # minimum trading days of lead-in before the first origin
 def run_backtest(
     rates: list[float],
     horizons: list[int],
-    differentials: list[float | None] | None = None,
+    factors: dict[str, list[float | None]] | None = None,
 ) -> dict[int, dict]:
     """Rolling-origin backtest for one currency's USD-pivot rate series
     (`rates`, ordered oldest to newest). For each horizon, returns the raw
@@ -34,24 +34,26 @@ def run_backtest(
     candidates are scored against the exact same origins and actuals, so
     the comparison is paired and fair.
 
-    `differentials`, when given, is parallel to `rates` (same length,
-    oldest to newest) -- the interest-rate differential known as of each
-    date, or None where macro coverage doesn't exist yet for that date.
-    When provided, each horizon's results additionally collect a
-    `"differentials"` list in lock-step with `"errors"` (same length,
-    same order), which summarize() uses to fit a regression. Omitting
-    `differentials` (the default) leaves every horizon's results
-    identical in shape to the pre-2b implementation -- this is a purely
-    additive extension, not a behavior change, for any caller that
-    doesn't pass it.
+    `factors`, when given, maps a factor name (e.g. "interest_rate",
+    "cpi", "gdp", "current_account") to a list parallel to `rates` (same
+    length, oldest to newest) -- that factor's differential known as of
+    each date, or None where macro coverage doesn't exist yet for that
+    date. When provided, each horizon's results additionally collects a
+    `"factors"` dict of {name: [...]}, each list in lock-step with
+    `"errors"` (same length, same order), which summarize() uses to
+    independently try fitting a regression against each factor and pick
+    whichever one wins for that (currency, horizon) -- never a joint fit
+    across all of them at once (see summarize()'s docstring for why).
+    Omitting `factors` (the default) leaves every horizon's results
+    identical in shape to the pre-existing single-factor implementation.
     """
     n = len(rates)
     results: dict[int, dict] = {
         h: {"errors": [], "naive_errors": [], "trailing_vols": []} for h in horizons
     }
-    if differentials is not None:
+    if factors is not None:
         for h in horizons:
-            results[h]["differentials"] = []
+            results[h]["factors"] = {name: [] for name in factors}
 
     for origin in range(MIN_HISTORY, n, ORIGIN_SPACING):
         history = rates[: origin + 1]
@@ -67,8 +69,9 @@ def run_backtest(
             results[horizon_days]["errors"].append((actual - predicted) / predicted)
             results[horizon_days]["naive_errors"].append((actual - predicted_naive) / predicted_naive)
             results[horizon_days]["trailing_vols"].append(trailing_vol)
-            if differentials is not None:
-                results[horizon_days]["differentials"].append(differentials[origin])
+            if factors is not None:
+                for name, series in factors.items():
+                    results[horizon_days]["factors"][name].append(series[origin])
 
     return results
 
@@ -126,6 +129,39 @@ def _select_model(errors: list[float], naive_errors: list[float] | None) -> str:
     return "naive" if naive_mae < es_mae else "exponential_smoothing"
 
 
+def _select_regression(
+    selected_errors: list[float], factors: dict[str, list[float | None]] | None
+) -> tuple[str, dict] | None:
+    """Independently tries fit_regression against each available factor
+    (interest-rate differential, CPI differential, GDP-growth
+    differential, current-account differential) and returns whichever
+    cleared fit_regression's significance gate with the lowest resulting
+    residual MAE, or None if none did.
+
+    Deliberately never a joint multivariate fit across all factors at
+    once: with only ~200-something backtest samples per horizon (and
+    macro fundamentals that often move together), a joint fit risks
+    overfitting far more than picking whichever single factor actually
+    has demonstrated, independently-significant explanatory power for
+    this specific currency and horizon.
+    """
+    if not factors:
+        return None
+    best: tuple[str, dict, float] | None = None
+    for name, series in factors.items():
+        paired = [(e, d) for e, d in zip(selected_errors, series) if d is not None]
+        if not paired:
+            continue
+        regression = fit_regression([e for e, _ in paired], [d for _, d in paired])
+        if regression is None:
+            continue
+        residuals = [e - (regression["slope"] * d + regression["intercept"]) for e, d in paired]
+        mae = sum(abs(r) for r in residuals) / len(residuals)
+        if best is None or mae < best[2]:
+            best = (name, regression, mae)
+    return (best[0], best[1]) if best else None
+
+
 def summarize(samples: dict) -> dict:
     """Turns one horizon's raw backtest samples into the stats stored in
     backtest_stats: which candidate model actually wins for this
@@ -133,10 +169,10 @@ def summarize(samples: dict) -> dict:
     percentile forecast error for the WINNING model (added to a fresh
     point forecast to build lower_bound/upper_bound), the 90th percentile
     of historically observed trailing volatility (the threshold today's
-    live volatility is compared against for the confidence flag), and a
-    fitted interest-rate differential regression, when `samples` includes
-    a `"differentials"` list and enough of its entries are non-None to
-    clear fit_regression's quality gate.
+    live volatility is compared against for the confidence flag), and
+    which macro factor's regression wins for this (currency, horizon)
+    (see _select_regression), when `samples` includes a `"factors"` dict
+    and at least one factor clears fit_regression's quality gate.
 
     The regression only ever adjusts exponential smoothing's residuals --
     naive_forecast has no baseline drift for a differential to correct,
@@ -147,28 +183,28 @@ def summarize(samples: dict) -> dict:
     recomputed from the POST-adjustment residuals, not the raw baseline
     errors -- otherwise the confidence band would misrepresent the
     adjusted model's real historical accuracy. An origin with no known
-    differential can't be adjusted (there's nothing to apply the
-    regression to), so its RAW baseline error is used as-is for that
-    entry -- this matches what the daily forecast job actually does when
-    today's current differential is unavailable (see
+    value for the winning factor can't be adjusted (there's nothing to
+    apply the regression to), so its RAW baseline error is used as-is for
+    that entry -- this matches what the daily forecast job actually does
+    when today's current value for that factor is unavailable (see
     app.prediction.jobs.run_forecast): no adjustment, baseline as-is.
     """
     errors = samples["errors"]
     naive_errors = samples.get("naive_errors")
-    diffs = samples.get("differentials")
+    factors = samples.get("factors")
 
     model_selected = _select_model(errors, naive_errors)
     selected_errors = errors if model_selected == "exponential_smoothing" else naive_errors
 
+    regression_factor = None
     regression = None
-    if diffs and model_selected == "exponential_smoothing":
-        paired = [(e, d) for e, d in zip(selected_errors, diffs) if d is not None]
-        if paired:
-            regression = fit_regression(
-                [e for e, _ in paired], [d for _, d in paired]
-            )
+    if factors and model_selected == "exponential_smoothing":
+        picked = _select_regression(selected_errors, factors)
+        if picked:
+            regression_factor, regression = picked
 
     if regression:
+        diffs = factors[regression_factor]
         residuals = [
             e - (regression["slope"] * d + regression["intercept"]) if d is not None else e
             for e, d in zip(selected_errors, diffs)
@@ -182,6 +218,7 @@ def summarize(samples: dict) -> dict:
         "error_upper_pct": percentile(sorted(residuals), 90),
         "volatility_p90": percentile(sorted(samples["trailing_vols"]), 90),
         "sample_count": len(selected_errors),
+        "regression_factor": regression_factor,
         "regression_slope": regression["slope"] if regression else None,
         "regression_intercept": regression["intercept"] if regression else None,
     }

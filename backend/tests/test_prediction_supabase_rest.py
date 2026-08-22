@@ -101,6 +101,7 @@ def test_get_backtest_stats_returns_stats_when_found():
             "error_lower_pct": -0.02,
             "error_upper_pct": 0.03,
             "volatility_p90": 0.015,
+            "regression_factor": "cpi",
             "regression_slope": 0.004,
             "regression_intercept": -0.01,
         }
@@ -116,12 +117,13 @@ def test_get_backtest_stats_returns_stats_when_found():
         "error_lower_pct": -0.02,
         "error_upper_pct": 0.03,
         "volatility_p90": 0.015,
+        "regression_factor": "cpi",
         "regression_slope": 0.004,
         "regression_intercept": -0.01,
     }
     args, kwargs = mock_get.call_args
     assert kwargs["params"] == {
-        "select": "model_selected,error_lower_pct,error_upper_pct,volatility_p90,regression_slope,regression_intercept",
+        "select": "model_selected,error_lower_pct,error_upper_pct,volatility_p90,regression_factor,regression_slope,regression_intercept",
         "quote_code": "eq.EUR",
         "horizon_days": "eq.30",
     }
@@ -155,6 +157,7 @@ def test_get_backtest_stats_returns_none_regression_fields_when_null():
             "error_lower_pct": -0.02,
             "error_upper_pct": 0.03,
             "volatility_p90": 0.015,
+            "regression_factor": None,
             "regression_slope": None,
             "regression_intercept": None,
         }
@@ -163,8 +166,29 @@ def test_get_backtest_stats_returns_none_regression_fields_when_null():
     with patch("app.prediction.supabase_rest.httpx.get", return_value=mock_response):
         result = get_backtest_stats("EUR", 30)
 
+    assert result["regression_factor"] is None
     assert result["regression_slope"] is None
     assert result["regression_intercept"] is None
+
+
+def test_get_backtest_stats_defaults_regression_factor_to_none_when_missing():
+    # Defends the accessor against a row that doesn't have the column
+    # selected/returned, same reasoning as model_selected's default above.
+    mock_response = MagicMock()
+    mock_response.json.return_value = [
+        {
+            "error_lower_pct": -0.02,
+            "error_upper_pct": 0.03,
+            "volatility_p90": 0.015,
+            "regression_slope": None,
+            "regression_intercept": None,
+        }
+    ]
+    mock_response.raise_for_status.return_value = None
+    with patch("app.prediction.supabase_rest.httpx.get", return_value=mock_response):
+        result = get_backtest_stats("EUR", 30)
+
+    assert result["regression_factor"] is None
 
 
 def test_get_backtest_stats_returns_none_when_not_found():

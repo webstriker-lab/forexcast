@@ -1,13 +1,14 @@
 # .github/workflows/macro.yml
-name: Ingest macro rates
+name: Ingest macro fundamentals
 
 on:
   schedule:
     # Weekly, Sundays at 17:00 UTC -- two hours before predict.yml's
     # Sunday backtest cron (19:00 UTC), so the backtest always fits
-    # against fresh macro data. FRED series update roughly monthly, so
-    # this cadence keeps macro_rates current within days of any new
-    # print without a wasteful daily fetch.
+    # against fresh macro data. FRED series update roughly monthly (CPI)
+    # to quarterly (GDP, current account), so this cadence keeps every
+    # fundamental current within days of any new print without a
+    # wasteful daily fetch.
     - cron: '0 17 * * 0'
   workflow_dispatch:
 
@@ -23,7 +24,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -r requirements.txt
-      - name: Run macro ingestion job
+      - name: Run macro ingestion jobs (interest rate, CPI, GDP, current account)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}

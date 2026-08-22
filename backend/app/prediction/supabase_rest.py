@@ -79,7 +79,7 @@ def get_backtest_stats(quote_code: str, horizon_days: int) -> dict | None:
     response = httpx.get(
         f"{settings.supabase_url}/rest/v1/backtest_stats",
         params={
-            "select": "model_selected,error_lower_pct,error_upper_pct,volatility_p90,regression_slope,regression_intercept",
+            "select": "model_selected,error_lower_pct,error_upper_pct,volatility_p90,regression_factor,regression_slope,regression_intercept",
             "quote_code": f"eq.{quote_code}",
             "horizon_days": f"eq.{horizon_days}",
         },
@@ -96,6 +96,7 @@ def get_backtest_stats(quote_code: str, horizon_days: int) -> dict | None:
         "error_lower_pct": float(row["error_lower_pct"]),
         "error_upper_pct": float(row["error_upper_pct"]),
         "volatility_p90": float(row["volatility_p90"]),
+        "regression_factor": row.get("regression_factor"),
         "regression_slope": float(row["regression_slope"]) if row["regression_slope"] is not None else None,
         "regression_intercept": float(row["regression_intercept"]) if row["regression_intercept"] is not None else None,
     }

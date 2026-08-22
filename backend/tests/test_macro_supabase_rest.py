@@ -3,8 +3,11 @@ from unittest.mock import MagicMock, patch
 
 from app.macro.supabase_rest import (
     get_latest_macro_rate,
+    get_latest_series_value,
     get_macro_rate_series,
+    get_series_history,
     upsert_macro_rates,
+    upsert_series,
 )
 
 
@@ -101,5 +104,97 @@ def test_get_latest_macro_rate_returns_none_when_stale():
     mock_response.raise_for_status.return_value = None
     with patch("app.macro.supabase_rest.httpx.get", return_value=mock_response):
         result = get_latest_macro_rate("EUR")
+
+    assert result is None
+
+
+# --- generic table-parameterized versions, reused across macro_cpi/
+# macro_gdp/macro_current_account (macro_rates itself keeps using its
+# own dedicated functions above, untouched) ---
+
+
+def test_upsert_series_posts_to_the_given_table_with_merge_duplicates():
+    mock_response = MagicMock()
+    mock_response.raise_for_status.return_value = None
+    rows = [{"currency_code": "EUR", "as_of": "2020-01-01", "series_id": "CPHPTT01EZM659N", "rate": 2.1}]
+    with patch("app.macro.supabase_rest.httpx.post", return_value=mock_response) as mock_post:
+        upsert_series("macro_cpi", rows)
+
+    args, kwargs = mock_post.call_args
+    assert args[0] == "https://example.supabase.co/rest/v1/macro_cpi"
+    assert kwargs["params"] == {"on_conflict": "currency_code,as_of"}
+    assert kwargs["headers"]["Prefer"] == "resolution=merge-duplicates"
+    assert kwargs["json"] == rows
+
+
+def test_get_series_history_returns_date_rate_tuples_from_the_given_table():
+    mock_response = MagicMock()
+    mock_response.json.return_value = [
+        {"as_of": "2020-01-01", "rate": 2.1},
+        {"as_of": "2020-04-01", "rate": 2.3},
+    ]
+    mock_response.raise_for_status.return_value = None
+    with patch("app.macro.supabase_rest.httpx.get", return_value=mock_response) as mock_get:
+        result = get_series_history("macro_gdp", "EUR")
+
+    assert result == [("2020-01-01", 2.1), ("2020-04-01", 2.3)]
+    args, kwargs = mock_get.call_args
+    assert args[0] == "https://example.supabase.co/rest/v1/macro_gdp"
+    assert kwargs["params"]["currency_code"] == "eq.EUR"
+    assert kwargs["params"]["order"] == "as_of.asc"
+
+
+def test_get_series_history_paginates():
+    page_size = 1000
+    first_page = [{"as_of": f"2020-{(i % 12) + 1:02d}-01", "rate": float(i)} for i in range(page_size)]
+    second_page = [{"as_of": "2099-01-01", "rate": 9.9}]
+    first_response = MagicMock()
+    first_response.json.return_value = first_page
+    first_response.raise_for_status.return_value = None
+    second_response = MagicMock()
+    second_response.json.return_value = second_page
+    second_response.raise_for_status.return_value = None
+    with patch(
+        "app.macro.supabase_rest.httpx.get", side_effect=[first_response, second_response]
+    ) as mock_get:
+        result = get_series_history("macro_current_account", "EUR")
+
+    assert len(result) == page_size + 1
+    assert mock_get.call_count == 2
+    assert mock_get.call_args_list[1].kwargs["params"]["offset"] == page_size
+
+
+def test_get_latest_series_value_returns_most_recent_value_from_the_given_table():
+    recent = (date.today() - timedelta(days=10)).isoformat()
+    mock_response = MagicMock()
+    mock_response.json.return_value = [{"as_of": recent, "rate": 1.9}]
+    mock_response.raise_for_status.return_value = None
+    with patch("app.macro.supabase_rest.httpx.get", return_value=mock_response) as mock_get:
+        result = get_latest_series_value("macro_cpi", "EUR")
+
+    assert result == 1.9
+    args, kwargs = mock_get.call_args
+    assert args[0] == "https://example.supabase.co/rest/v1/macro_cpi"
+    assert kwargs["params"]["order"] == "as_of.desc"
+    assert kwargs["params"]["limit"] == 1
+
+
+def test_get_latest_series_value_returns_none_when_no_data():
+    mock_response = MagicMock()
+    mock_response.json.return_value = []
+    mock_response.raise_for_status.return_value = None
+    with patch("app.macro.supabase_rest.httpx.get", return_value=mock_response):
+        result = get_latest_series_value("macro_cpi", "EUR")
+
+    assert result is None
+
+
+def test_get_latest_series_value_returns_none_when_stale():
+    stale = (date.today() - timedelta(days=1000)).isoformat()
+    mock_response = MagicMock()
+    mock_response.json.return_value = [{"as_of": stale, "rate": 1.9}]
+    mock_response.raise_for_status.return_value = None
+    with patch("app.macro.supabase_rest.httpx.get", return_value=mock_response):
+        result = get_latest_series_value("macro_cpi", "EUR")
 
     assert result is None
