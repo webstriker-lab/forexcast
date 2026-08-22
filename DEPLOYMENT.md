@@ -52,6 +52,15 @@ ingestion or forecasting.
    `FRONTEND_ORIGIN` to this URL (redeploy the backend for it to take
    effect).
 
+   Note: Vercel's `.vercel.app` subdomains are a global namespace shared
+   across all Vercel users, not scoped to your account -- if the plain
+   project name is already taken by someone else, Vercel silently
+   assigns a suffixed alias instead (e.g. `forexcast-eight.vercel.app`
+   rather than `forexcast.vercel.app`). Always confirm the actual URL via
+   `vercel project ls` or the dashboard's "Domains" tab rather than
+   assuming `<project-name>.vercel.app` -- this app's real production URL
+   is **`https://forexcast-eight.vercel.app`**, not `forexcast.vercel.app`.
+
    Note: `frontend/vercel.json` is committed in the repo and auto-detected
    by Vercel — it adds a SPA rewrite rule so deep links like `/login` and
    `/dashboard` don't 404 on refresh. No manual configuration needed.
