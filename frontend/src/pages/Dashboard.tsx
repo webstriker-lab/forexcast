@@ -39,8 +39,9 @@ export default function Dashboard() {
 
   const interpolated: InterpolatedPrediction | null = (() => {
     if (!targetDate || predictions.length === 0) return null
-    const ms = new Date(targetDate).getTime() - Date.now()
-    const targetDays = Math.max(1, Math.round(ms / 86400000))
+    const today = new Date(); today.setHours(12, 0, 0, 0)
+    const tgt = new Date(targetDate + 'T12:00:00')
+    const targetDays = Math.max(1, Math.round((tgt.getTime() - today.getTime()) / 86400000))
     return interpolatePrediction(predictions, targetDays)
   })()
 
