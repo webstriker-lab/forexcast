@@ -1,6 +1,9 @@
 import * as fs from 'fs'
 import * as path from 'path'
+import { fileURLToPath } from 'url'
 import { chromium, type FullConfig } from '@playwright/test'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default async function globalSetup(_config: FullConfig) {
   const email = process.env.VITE_TEST_EMAIL

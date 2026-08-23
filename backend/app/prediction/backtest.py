@@ -223,6 +223,7 @@ def summarize(samples: dict) -> dict:
     else:
         mae_improvement_pct = None
 
+    # In-sample coverage: fraction of residuals within the p10-p90 band of those same residuals. Expect ~0.80 by construction.
     error_lower = percentile(sorted(residuals), 10)
     error_upper = percentile(sorted(residuals), 90)
     calibration_coverage = (

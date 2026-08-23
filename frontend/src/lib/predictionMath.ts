@@ -135,6 +135,7 @@ export function interpolatePrediction(
 
   const t = (targetDays - lower.horizon_days) / (upper.horizon_days - lower.horizon_days)
   return {
+    ...lower,
     horizon_days: targetDays,
     predicted_rate: lower.predicted_rate * (1 - t) + upper.predicted_rate * t,
     lower_bound: lower.lower_bound * (1 - t) + upper.lower_bound * t,

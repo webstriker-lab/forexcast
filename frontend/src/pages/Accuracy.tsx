@@ -47,10 +47,11 @@ export default function Accuracy() {
 
   const rows = statsByHorizon.get(activeHorizon) ?? []
   const esBeatCount = rows.filter((r) => r.model_selected === 'exponential_smoothing').length
+  const calibRows = rows.filter((r) => r.calibration_coverage !== null)
   const avgCalib =
-    rows.length > 0
-      ? rows.reduce((sum, r) => sum + (r.calibration_coverage ?? 0), 0) / rows.length
-      : 0
+    calibRows.length > 0
+      ? calibRows.reduce((sum, r) => sum + r.calibration_coverage!, 0) / calibRows.length
+      : null
 
   return (
     <Layout>
@@ -75,7 +76,9 @@ export default function Accuracy() {
                 {esBeatCount} of {rows.length} pairs
               </span>{' '}
               beat the naive baseline · avg calibration coverage:{' '}
-              <span className="font-semibold">{(avgCalib * 100).toFixed(0)}%</span>
+              <span className="font-semibold">
+                {avgCalib !== null ? `${(avgCalib * 100).toFixed(0)}%` : '—'}
+              </span>
             </div>
 
             {/* Horizon tabs */}

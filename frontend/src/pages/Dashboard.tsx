@@ -31,7 +31,6 @@ export default function Dashboard() {
 
   const [targetDate, setTargetDate] = useState('')
 
-  const todayStr = new Date().toISOString().split('T')[0]
   const maxDateStr = (() => {
     const d = new Date()
     d.setDate(d.getDate() + 365)
