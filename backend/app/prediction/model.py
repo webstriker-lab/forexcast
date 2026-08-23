@@ -1,4 +1,4 @@
-from statsmodels.tsa.holtwinters import ExponentialSmoothing
+﻿from statsmodels.tsa.holtwinters import ExponentialSmoothing
 
 
 def naive_forecast(values: list[float], steps: int) -> float:
@@ -18,21 +18,26 @@ def naive_forecast(values: list[float], steps: int) -> float:
 
 
 def forecast(values: list[float], steps: int) -> float:
-    """Fits a damped additive-trend exponential smoothing model on `values`
+    """Fits a simple (level-only) exponential smoothing model on `values`
     (ordered oldest to newest, no seasonality assumed) and returns the
     point forecast `steps` steps ahead.
 
-    This is the sole model candidate for now. The backtest harness
-    (app.prediction.backtest) and the daily job (app.prediction.jobs) both
-    call this function by name rather than embedding model logic
-    themselves, so adding a second candidate (e.g. ARIMA) later, and
-    letting the backtest decide which wins per currency, means adding a
-    function here -- not redesigning either caller.
+    No trend component: FX rates are close to random walks at all horizons
+    (Meese & Rogoff, 1983) and an additive trend extrapolates short-term
+    momentum that does not persist at 90+ day horizons, making the
+    backtested error worse than naive at those horizons. Simple ES
+    (alpha estimated by MLE) retains the smoothed-level signal without
+    the trend liability.
+
+    The backtest harness (app.prediction.backtest) and the daily job
+    (app.prediction.jobs) both call this function by name rather than
+    embedding model logic themselves, so adding a second candidate
+    (e.g. ARIMA) later means adding a function here -- not redesigning
+    either caller.
     """
     model = ExponentialSmoothing(
         values,
-        trend="add",
-        damped_trend=True,
+        trend=None,
         seasonal=None,
         initialization_method="estimated",
     )

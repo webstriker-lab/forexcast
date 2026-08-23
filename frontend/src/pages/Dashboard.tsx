@@ -1,10 +1,11 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { interpolatePrediction, type InterpolatedPrediction } from '../lib/predictionMath'
 import { DatePredictionCard } from '../components/DatePredictionCard'
 import { useWatchlist } from '../hooks/useWatchlist'
 import { useRates } from '../hooks/useRates'
 import { usePredictions } from '../hooks/usePredictions'
 import { useRecommendations } from '../hooks/useRecommendations'
+import { useRecommendationInsights } from '../hooks/useRecommendationInsights'
 import { PairPicker } from '../components/PairPicker'
 import { RateChart } from '../components/RateChart'
 import { RecommendationCard } from '../components/RecommendationCard'
@@ -25,6 +26,7 @@ export default function Dashboard() {
   const { rates, loading: ratesLoading, error: ratesError } = useRates(base, quote)
   const { predictions, loading: predLoading, error: predError } = usePredictions(base, quote)
   const { rec, loading: recLoading, error: recError } = useRecommendations(base, quote)
+  const { insights } = useRecommendationInsights(base, quote)
 
   const pair = base && quote ? `${base}/${quote}` : ''
   const error = watchlistError || ratesError || predError || recError
@@ -36,6 +38,12 @@ export default function Dashboard() {
     d.setDate(d.getDate() + 365)
     return d.toISOString().split('T')[0]
   })()
+
+  function daysFromToday(n: number): string {
+    const d = new Date()
+    d.setDate(d.getDate() + n)
+    return d.toISOString().split('T')[0]
+  }
 
   const interpolated: InterpolatedPrediction | null = (() => {
     if (!targetDate || predictions.length === 0) return null
@@ -76,13 +84,24 @@ export default function Dashboard() {
             {recLoading ? (
               <div className="h-24 bg-white rounded-lg shadow animate-pulse" />
             ) : (
-              <RecommendationCard rec={rec} pair={pair} />
+              <RecommendationCard rec={rec} pair={pair} insights={insights} />
             )}
 
             {/* Date prediction */}
             {!predLoading && (
               <div className="bg-white rounded-lg shadow p-4 space-y-3">
                 <p className="text-sm font-medium text-gray-700">Predict for a specific date</p>
+                <div className="flex gap-2">
+                  {([7, 30, 90, 365] as const).map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setTargetDate(daysFromToday(n))}
+                      className="px-3 py-1 text-xs font-medium rounded-full border border-gray-300 text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                    >
+                      {n}d
+                    </button>
+                  ))}
+                </div>
                 <div className="flex items-center gap-3">
                   <input
                     type="date"
@@ -104,6 +123,9 @@ export default function Dashboard() {
                 {interpolated && (
                   <DatePredictionCard prediction={interpolated} pair={pair} targetDate={targetDate} />
                 )}
+                <p className="text-xs text-gray-400">
+                  Forecasts are statistical estimates. Dates between stored horizons (7 / 30 / 90 / 365 days) are linearly interpolated \u2014 accuracy degrades for dates far from a stored anchor.
+                </p>
               </div>
             )}
 
@@ -115,11 +137,6 @@ export default function Dashboard() {
             ) : (
               <RateChart rates={rates} predictions={predictions} pair={pair} />
             )}
-
-            {/* Disclaimer */}
-            <p className="text-xs text-gray-400 text-center">
-              ⚠️ Not financial advice. Forecasts are statistical estimates, not guarantees.
-            </p>
           </>
         )}
       </div>

@@ -109,3 +109,22 @@ export async function checkinStreak(): Promise<{ streaks: unknown; new_achieveme
   }
   return res.json()
 }
+
+export interface RecommendationInsights {
+  requires_llm_setup: boolean
+  sentiment: { score: number; summary: string } | null
+}
+
+export async function fetchRecommendationInsights(base: string, quote: string): Promise<RecommendationInsights> {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) throw new Error('Not authenticated')
+
+  const res = await fetch(`${API_BASE_URL}/recommendations/${base}/${quote}/insights`, {
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }))
+    throw new Error(err.detail || `HTTP ${res.status}`)
+  }
+  return res.json()
+}
