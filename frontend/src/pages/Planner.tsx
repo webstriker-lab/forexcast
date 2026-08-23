@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+﻿import { useEffect, useState } from 'react'
 import { Layout } from '../components/Layout'
 import { MascotWidget } from '../components/MascotWidget'
 import { StreakCounter } from '../components/StreakCounter'
@@ -13,9 +13,10 @@ import { convertUsdTo, fetchUsdConversionRates } from '../lib/currencyConversion
 import { Link } from 'react-router-dom'
 
 export default function Planner() {
-  const { debts, loading: debtsLoading } = useDebts()
-  const { goals, loading: goalsLoading } = useSavingsGoals()
-  const { achievements, streaks, badges, loading: achievementsLoading, recordCheckin } = useAchievements()
+  const { debts, loading: debtsLoading, error: debtsError } = useDebts()
+  const { goals, loading: goalsLoading, error: goalsError } = useSavingsGoals()
+  const { achievements, streaks, badges, loading: achievementsLoading, error: achievementsError, recordCheckin } = useAchievements()
+  const plannerError = debtsError || goalsError || achievementsError
   const { currency: displayCurrency } = useDisplayCurrency()
 
   const activeDebts = debts.filter(d => d.is_active)
@@ -96,6 +97,11 @@ export default function Planner() {
 
   return (
     <Layout>
+      {plannerError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-4 py-3">
+          Could not load planner data — {plannerError}
+        </div>
+      )}
       <div className="space-y-6">
         {/* Mascot */}
         <MascotWidget context="welcome" />

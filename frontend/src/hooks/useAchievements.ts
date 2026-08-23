@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+﻿import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import { checkinStreak, getBadges } from '../lib/apiClient'
 
@@ -35,45 +35,50 @@ export function useAchievements() {
   const [error, setError] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
-    const [achievementsResult, streaksResult, badgesResult] = await Promise.all([
-      supabase.from('achievements').select('*').order('earned_at', { ascending: false }),
-      supabase.from('streaks').select('*').maybeSingle(),
-      getBadges().catch((err: Error) => {
-        setError(err.message)
-        return {} as Record<string, Badge>
-      }),
-    ])
+    try {
+      const [achievementsResult, streaksResult, badgesResult] = await Promise.all([
+        supabase.from('achievements').select('*').order('earned_at', { ascending: false }),
+        supabase.from('streaks').select('*').maybeSingle(),
+        getBadges().catch((err: Error) => {
+          setError(err.message)
+          return {} as Record<string, Badge>
+        }),
+      ])
 
-    if (achievementsResult.error) {
-      setError(achievementsResult.error.message)
-    } else {
-      setAchievements(achievementsResult.data ?? [])
+      if (achievementsResult.error) {
+        setError(achievementsResult.error.message)
+      } else {
+        setAchievements(achievementsResult.data ?? [])
+      }
+      if (streaksResult.error) {
+        setError(streaksResult.error.message)
+      } else {
+        // .maybeSingle() returns null both when the row genuinely doesn't
+        // exist yet (a user who's never checked in) and would otherwise be
+        // indistinguishable from "still loading" to StreakCounter, which
+        // renders its loading state on any null streaks -- default to an
+        // explicit zero-value object so a real, permanent zero state
+        // renders instead of an infinite "Loading streaks...".
+        setStreaks(
+          streaksResult.data ?? {
+            daily_checkin_current: 0,
+            daily_checkin_best: 0,
+            daily_checkin_last: null,
+            savings_current: 0,
+            savings_best: 0,
+            savings_last: null,
+            debt_payment_current: 0,
+            debt_payment_best: 0,
+            debt_payment_last: null,
+          },
+        )
+      }
+      setBadges(badgesResult)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load achievements')
+    } finally {
+      setLoading(false)
     }
-    if (streaksResult.error) {
-      setError(streaksResult.error.message)
-    } else {
-      // .maybeSingle() returns null both when the row genuinely doesn't
-      // exist yet (a user who's never checked in) and would otherwise be
-      // indistinguishable from "still loading" to StreakCounter, which
-      // renders its loading state on any null streaks -- default to an
-      // explicit zero-value object so a real, permanent zero state
-      // renders instead of an infinite "Loading streaks...".
-      setStreaks(
-        streaksResult.data ?? {
-          daily_checkin_current: 0,
-          daily_checkin_best: 0,
-          daily_checkin_last: null,
-          savings_current: 0,
-          savings_best: 0,
-          savings_last: null,
-          debt_payment_current: 0,
-          debt_payment_best: 0,
-          debt_payment_last: null,
-        },
-      )
-    }
-    setBadges(badgesResult)
-    setLoading(false)
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
