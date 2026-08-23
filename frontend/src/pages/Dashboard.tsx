@@ -1,10 +1,11 @@
-import { useState } from 'react'
+﻿import { useState } from 'react'
 import { interpolatePrediction, type InterpolatedPrediction } from '../lib/predictionMath'
 import { DatePredictionCard } from '../components/DatePredictionCard'
 import { useWatchlist } from '../hooks/useWatchlist'
 import { useRates } from '../hooks/useRates'
 import { usePredictions } from '../hooks/usePredictions'
 import { useRecommendations } from '../hooks/useRecommendations'
+import { useRecommendationInsights } from '../hooks/useRecommendationInsights'
 import { PairPicker } from '../components/PairPicker'
 import { RateChart } from '../components/RateChart'
 import { RecommendationCard } from '../components/RecommendationCard'
@@ -25,6 +26,7 @@ export default function Dashboard() {
   const { rates, loading: ratesLoading, error: ratesError } = useRates(base, quote)
   const { predictions, loading: predLoading, error: predError } = usePredictions(base, quote)
   const { rec, loading: recLoading, error: recError } = useRecommendations(base, quote)
+  const { insights } = useRecommendationInsights(base, quote)
 
   const pair = base && quote ? `${base}/${quote}` : ''
   const error = watchlistError || ratesError || predError || recError
@@ -76,7 +78,7 @@ export default function Dashboard() {
             {recLoading ? (
               <div className="h-24 bg-white rounded-lg shadow animate-pulse" />
             ) : (
-              <RecommendationCard rec={rec} pair={pair} />
+              <RecommendationCard rec={rec} pair={pair} insights={insights} />
             )}
 
             {/* Date prediction */}
@@ -118,7 +120,7 @@ export default function Dashboard() {
 
             {/* Disclaimer */}
             <p className="text-xs text-gray-400 text-center">
-              ⚠️ Not financial advice. Forecasts are statistical estimates, not guarantees.
+              Forecasts are statistical estimates. Dates that fall between stored horizons (7 / 30 / 90 / 365 days) are linearly interpolated \u2014 accuracy degrades for dates far from a stored anchor.
             </p>
           </>
         )}
