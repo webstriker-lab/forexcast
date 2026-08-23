@@ -245,6 +245,10 @@ def run_backtest_job() -> int:
                     "regression_factor": summary["regression_factor"],
                     "regression_slope": summary["regression_slope"],
                     "regression_intercept": summary["regression_intercept"],
+                    "es_mae": summary["es_mae"],
+                    "naive_mae": summary["naive_mae"],
+                    "mae_improvement_pct": summary["mae_improvement_pct"],
+                    "calibration_coverage": summary["calibration_coverage"],
                 }
             )
     upsert_backtest_stats(rows)
