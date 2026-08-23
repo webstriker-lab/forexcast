@@ -6,6 +6,7 @@ const navItems = [
   { path: '/planner', label: 'Planner' },
   { path: '/alerts', label: 'Alerts' },
   { path: '/chat', label: 'Chat' },
+  { path: '/accuracy', label: 'Accuracy' },
   { path: '/settings', label: 'Settings' },
 ]
 
