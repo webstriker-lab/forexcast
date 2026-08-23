@@ -65,6 +65,8 @@ export default function Accuracy() {
 
         {loading ? (
           <div className="text-center text-gray-400 py-12">Loading accuracy stats…</div>
+        ) : error ? (
+          null
         ) : (
           <>
             {/* Summary strip */}
