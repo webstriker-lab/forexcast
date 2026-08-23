@@ -212,13 +212,36 @@ def summarize(samples: dict) -> dict:
     else:
         residuals = selected_errors
 
+    # Accuracy metrics — computed from raw ES errors and raw naive errors
+    # so the comparison is always ES vs naive regardless of which model won.
+    es_mae: float | None = sum(abs(e) for e in errors) / len(errors) if errors else None
+    naive_mae: float | None = (
+        sum(abs(e) for e in naive_errors) / len(naive_errors) if naive_errors else None
+    )
+    if es_mae is not None and naive_mae is not None and naive_mae != 0:
+        mae_improvement_pct: float | None = (naive_mae - es_mae) / naive_mae * 100
+    else:
+        mae_improvement_pct = None
+
+    error_lower = percentile(sorted(residuals), 10)
+    error_upper = percentile(sorted(residuals), 90)
+    calibration_coverage = (
+        sum(1 for r in residuals if error_lower <= r <= error_upper) / len(residuals)
+        if residuals
+        else 0.0
+    )
+
     return {
         "model_selected": model_selected,
-        "error_lower_pct": percentile(sorted(residuals), 10),
-        "error_upper_pct": percentile(sorted(residuals), 90),
+        "error_lower_pct": error_lower,
+        "error_upper_pct": error_upper,
         "volatility_p90": percentile(sorted(samples["trailing_vols"]), 90),
         "sample_count": len(selected_errors),
         "regression_factor": regression_factor,
         "regression_slope": regression["slope"] if regression else None,
         "regression_intercept": regression["intercept"] if regression else None,
+        "es_mae": es_mae,
+        "naive_mae": naive_mae,
+        "mae_improvement_pct": mae_improvement_pct,
+        "calibration_coverage": calibration_coverage,
     }
