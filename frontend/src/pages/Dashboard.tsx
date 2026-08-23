@@ -39,6 +39,12 @@ export default function Dashboard() {
     return d.toISOString().split('T')[0]
   })()
 
+  function daysFromToday(n: number): string {
+    const d = new Date()
+    d.setDate(d.getDate() + n)
+    return d.toISOString().split('T')[0]
+  }
+
   const interpolated: InterpolatedPrediction | null = (() => {
     if (!targetDate || predictions.length === 0) return null
     const today = new Date(); today.setHours(12, 0, 0, 0)
@@ -85,6 +91,17 @@ export default function Dashboard() {
             {!predLoading && (
               <div className="bg-white rounded-lg shadow p-4 space-y-3">
                 <p className="text-sm font-medium text-gray-700">Predict for a specific date</p>
+                <div className="flex gap-2">
+                  {([7, 30, 90, 365] as const).map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setTargetDate(daysFromToday(n))}
+                      className="px-3 py-1 text-xs font-medium rounded-full border border-gray-300 text-gray-600 hover:border-blue-400 hover:text-blue-600 transition-colors"
+                    >
+                      {n}d
+                    </button>
+                  ))}
+                </div>
                 <div className="flex items-center gap-3">
                   <input
                     type="date"
@@ -106,6 +123,9 @@ export default function Dashboard() {
                 {interpolated && (
                   <DatePredictionCard prediction={interpolated} pair={pair} targetDate={targetDate} />
                 )}
+                <p className="text-xs text-gray-400">
+                  Forecasts are statistical estimates. Dates between stored horizons (7 / 30 / 90 / 365 days) are linearly interpolated \u2014 accuracy degrades for dates far from a stored anchor.
+                </p>
               </div>
             )}
 
@@ -117,11 +137,6 @@ export default function Dashboard() {
             ) : (
               <RateChart rates={rates} predictions={predictions} pair={pair} />
             )}
-
-            {/* Disclaimer */}
-            <p className="text-xs text-gray-400 text-center">
-              Forecasts are statistical estimates. Dates that fall between stored horizons (7 / 30 / 90 / 365 days) are linearly interpolated \u2014 accuracy degrades for dates far from a stored anchor.
-            </p>
           </>
         )}
       </div>
