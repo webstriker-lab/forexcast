@@ -11,6 +11,7 @@ import Planner from './pages/Planner'
 import Debts from './pages/Debts'
 import Goals from './pages/Goals'
 import Achievements from './pages/Achievements'
+import Accuracy from './pages/Accuracy'
 import ProtectedRoute from './components/ProtectedRoute'
 
 function Home() {
@@ -55,6 +56,7 @@ export default function App() {
           <Route path="/planner/debts" element={<ProtectedRoute><Debts /></ProtectedRoute>} />
           <Route path="/planner/goals" element={<ProtectedRoute><Goals /></ProtectedRoute>} />
           <Route path="/planner/achievements" element={<ProtectedRoute><Achievements /></ProtectedRoute>} />
+          <Route path="/accuracy" element={<ProtectedRoute><Accuracy /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

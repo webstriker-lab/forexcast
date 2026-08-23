@@ -14,5 +14,5 @@ create table public.backtest_stats (
 );
 
 alter table public.backtest_stats enable row level security;
--- Deliberately no select policy: only the service role (which bypasses
--- RLS) reads or writes this table.
+-- Select policy added in 0013_backtest_stats_authenticated_read_policy.sql.
+-- The service role (used by the weekly backtest job) bypasses RLS and can still write.

@@ -103,3 +103,47 @@ export function chooseRecommendation(
     reference_horizon_days: reference.horizon_days,
   }
 }
+
+export interface InterpolatedPrediction extends RawPrediction {
+  source_lower_days: number
+  source_upper_days: number
+}
+
+export function interpolatePrediction(
+  predictions: RawPrediction[],
+  targetDays: number,
+): InterpolatedPrediction {
+  if (predictions.length === 0) throw new Error('no predictions to interpolate from')
+  const sorted = [...predictions].sort((a, b) => a.horizon_days - b.horizon_days)
+  const min = sorted[0]
+  const max = sorted[sorted.length - 1]
+
+  if (targetDays <= min.horizon_days) {
+    return { ...min, horizon_days: targetDays, source_lower_days: min.horizon_days, source_upper_days: min.horizon_days }
+  }
+  if (targetDays >= max.horizon_days) {
+    return { ...max, horizon_days: targetDays, source_lower_days: max.horizon_days, source_upper_days: max.horizon_days }
+  }
+
+  const upperIndex = sorted.findIndex((p) => p.horizon_days > targetDays)
+  const upper = sorted[upperIndex]
+  const lower = sorted[upperIndex - 1]
+
+  if (lower.horizon_days === targetDays) {
+    return { ...lower, source_lower_days: lower.horizon_days, source_upper_days: lower.horizon_days }
+  }
+
+  const t = (targetDays - lower.horizon_days) / (upper.horizon_days - lower.horizon_days)
+  return {
+    ...lower,
+    horizon_days: targetDays,
+    predicted_rate: lower.predicted_rate * (1 - t) + upper.predicted_rate * t,
+    lower_bound: lower.lower_bound * (1 - t) + upper.lower_bound * t,
+    upper_bound: lower.upper_bound * (1 - t) + upper.upper_bound * t,
+    confidence: lower.confidence === 'low' || upper.confidence === 'low' ? 'low' : 'normal',
+    generated_at:
+      lower.generated_at < upper.generated_at ? lower.generated_at : upper.generated_at,
+    source_lower_days: lower.horizon_days,
+    source_upper_days: upper.horizon_days,
+  }
+}
