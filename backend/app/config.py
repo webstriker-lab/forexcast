@@ -1,4 +1,4 @@
-from functools import lru_cache
+﻿from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -20,3 +20,8 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+def is_llm_configured() -> bool:
+    s = get_settings()
+    return bool((s.llm_api_key and s.llm_provider) or s.openrouter_api_key)
